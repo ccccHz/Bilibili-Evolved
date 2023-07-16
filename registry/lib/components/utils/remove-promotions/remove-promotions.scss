@@ -19,6 +19,8 @@
 .mascot,
 .rank-container .cm-module,
 body:not(.preserve-event-banner) .activity-m,
+body:not(.preserve-event-banner) .activity-m-v1,
+body:not(.preserve-reply-notice) .reply-notice,
 body.remove-game-match-module .bili-wrapper > .home-match,
 body.remove-game-match-module #reportFirst3,
 .home-content .ad-panel,
@@ -84,6 +86,9 @@ body:not(.preserve-feed-goods) .bili-dyn-content__orig__additional:has(.dyn-good
 }
 .bili-video-card__wrap {
   a[href*="cm.bilibili.com"] {
+    pointer-events: none !important;
+    cursor: default !important;
+
     > * {
       visibility: hidden !important;
     }
