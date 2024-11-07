@@ -5,7 +5,7 @@
         <VIcon
           class="switch-icon"
           icon="mdi-checkbox-marked-circle-outline"
-          :size="smallSize ? 16 : 22"
+          :size="smallSize ? 16 : 24"
         ></VIcon>
         {{ options.optionDisplayName }}
       </VButton>
@@ -21,7 +21,7 @@
           v-for="name of Object.keys(options.switches)"
           :key="name"
           :class="{ dim: isDim(name) }"
-          v-bind="options.switchProps || {}"
+          v-bind="mergedSwitchProps"
           :checked="componentOptions[`switch-${name}`]"
           @change="componentOptions[`switch-${name}`] = $event"
         >
@@ -36,7 +36,7 @@
           v-for="name of Object.keys(options.switches)"
           :key="name"
           :class="{ dim: isDim(name) }"
-          v-bind="options.switchProps || {}"
+          v-bind="mergedSwitchProps"
           :checked="componentOptions[`switch-${name}`]"
           @change="componentOptions[`switch-${name}`] = $event"
         >
@@ -82,6 +82,15 @@ export default Vue.extend({
       componentOptions,
     }
   },
+  computed: {
+    mergedSwitchProps() {
+      return {
+        checkedIcon: 'mdi-eye-off-outline',
+        notCheckedIcon: 'mdi-eye-outline',
+        ...this.options.switchProps,
+      }
+    },
+  },
   watch: {
     options() {
       this.updateColumnsCount()
@@ -97,10 +106,13 @@ export default Vue.extend({
       element.style.setProperty('--columns', columns.toString())
     },
     isDim(name: string) {
-      return (
-        (this.componentOptions[`switch-${name}`] && this.options.dimAt === 'checked') ||
-        this.options.dimAt === 'notChecked'
-      )
+      if (this.options.dimAt === 'checked' || this.options.dimAt === undefined) {
+        return this.componentOptions[`switch-${name}`]
+      }
+      if (this.options.dimAt === 'notChecked') {
+        return !this.componentOptions[`switch-${name}`]
+      }
+      return false
     },
   },
 })
@@ -116,6 +128,7 @@ export default Vue.extend({
   }
   .switch-icon {
     margin-right: 8px;
+    opacity: 0.75;
     transform: scale(0.9);
   }
   .dim {

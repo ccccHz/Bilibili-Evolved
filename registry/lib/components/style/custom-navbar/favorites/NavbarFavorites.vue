@@ -22,7 +22,7 @@
       <transition-group v-else name="cards" tag="div" class="cards">
         <div v-for="card of filteredCards" :key="card.id" class="favorite-card">
           <a
-            class="cover-container"
+            class="favorites-cover-container"
             target="_blank"
             :href="'https://www.bilibili.com/video/' + card.bvid"
           >
@@ -103,7 +103,10 @@ const favoriteItemMapper = (item: any): FavoritesItemInfo => ({
   title: item.title,
   description: item.intro,
   duration: item.duration,
-  durationText: formatDuration(item.duration),
+  durationText:
+    item.page > 1
+      ? `${formatDuration(item.duration)} / ${item.page}P`
+      : formatDuration(item.duration),
   playCount: item.cnt_info.play,
   danmakuCount: item.cnt_info.danmaku,
   upName: item.upper.name,
@@ -376,7 +379,7 @@ export default Vue.extend({
         &:hover .cover {
           transform: scale(1.05);
         }
-        .cover-container {
+        .favorites-cover-container {
           grid-area: cover;
           overflow: hidden;
           border-radius: 8px 0 0 8px;

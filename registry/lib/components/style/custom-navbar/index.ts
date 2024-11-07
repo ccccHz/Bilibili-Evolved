@@ -7,12 +7,23 @@ import { LaunchBarActionProvider } from '@/components/launch-bar/launch-bar-acti
 import { urlInclude, urlExclude } from './urls'
 import { entry } from './entry'
 import { getNumberValidator } from '@/core/utils'
+import { NavbarNotifyStyle } from './notify-style'
+import { NavbarLinkPopupContentAlignStyle } from './link-popup-content-align-style'
 
 const styleID = 'custom-navbar-style'
 const options = defineOptionsMetadata({
   hidden: {
     hidden: true,
-    defaultValue: ['blank1', 'blank4', 'drawing', 'music', 'gamesIframe', 'bangumi', 'match'],
+    defaultValue: [
+      'blank1',
+      'blank4',
+      'drawing',
+      'music',
+      'gamesIframe',
+      'bangumi',
+      'match',
+      'creations',
+    ],
     displayName: '隐藏的元素',
   },
   order: {
@@ -76,6 +87,24 @@ const options = defineOptionsMetadata({
     displayName: '显示已失效视频',
     hidden: true,
   },
+  notifyStyle: {
+    defaultValue: NavbarNotifyStyle.Number,
+    dropdownEnum: NavbarNotifyStyle,
+    displayName: '消息提醒样式',
+  },
+  linkPopupContentAlignStyle: {
+    defaultValue: NavbarLinkPopupContentAlignStyle.Left,
+    dropdownEnum: NavbarLinkPopupContentAlignStyle,
+    displayName: '链接对齐样式',
+  },
+  searchBarWidth: {
+    defaultValue: 15,
+    slider: {
+      min: 8,
+      max: 64,
+    },
+    displayName: '搜索栏宽度 (%)',
+  },
 })
 export const component = defineComponentMetadata({
   name: 'customNavbar',
@@ -103,6 +132,9 @@ export const component = defineComponentMetadata({
     // const { default: style } = await import('./hide-original.scss')
     // const { addImportantStyle } = await import('@/core/style')
     // addImportantStyle(style, styleID)
+  },
+  widget: {
+    component: () => import('./settings/Widget.vue').then(m => m.default),
   },
   extraOptions: () => import('./settings/ExtraOptions.vue').then(m => m.default),
   plugin: {

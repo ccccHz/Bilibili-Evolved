@@ -1,5 +1,4 @@
 import { getJsonWithCredentials, bilibiliApi } from '@/core/ajax'
-import { fixed } from '@/core/utils'
 import { formatDuration } from '@/core/utils/formatters'
 
 /** 历史项目类型, 值为 API 中的 `history.business` */
@@ -9,6 +8,7 @@ export enum HistoryType {
   Live = 'live',
   Article = 'article',
   Bangumi = 'pgc',
+  Cheese = 'cheese',
 }
 export interface HistoryItem {
   id: string | number
@@ -51,8 +51,8 @@ export interface TypeFilter {
   checked: boolean
   apiType: string
 }
-/** 所有的历史记录类型 */
-export const types = [
+/** 顶栏可筛选的历史记录类型 */
+export const navbarFilterTypes = [
   {
     name: HistoryType.All,
     displayName: '全部',
@@ -72,6 +72,7 @@ export const types = [
     displayName: '番剧',
     icon: 'mdi-television-classic',
     checked: false,
+    // b 站的历史不区分视频和番剧, 只能混着拿然后过滤
     apiType: 'archive',
   },
   {
@@ -105,13 +106,13 @@ const getTimeData = () => {
   }
 }
 const formatTime = (date: Date) => {
-  const { yesterday } = getTimeData()
+  const { yesterday, today } = getTimeData()
   const timestamp = Number(date)
   if (timestamp >= yesterday) {
-    return `${date.getHours().toString().padStart(2, '0')}:${date
-      .getMinutes()
+    return `${timestamp >= today ? '今天' : '昨天'} ${date
+      .getHours()
       .toString()
-      .padStart(2, '0')}`
+      .padStart(2, '0')}:${date.getMinutes().toString().padStart(2, '0')}`
   }
   return `${(date.getMonth() + 1).toString().padStart(2, '0')}-${date
     .getDate()
@@ -122,14 +123,14 @@ const formatTime = (date: Date) => {
     .padStart(2, '0')}`
 }
 const parseHistoryItem = (item: any): HistoryItem => {
-  if (item.history.business === 'article') {
+  if (item.history.business === HistoryType.Article) {
     item.history.cid = item.history.oid
   }
   const {
     epid, // 番剧 ep号
     bvid, // 视频 bv号
     cid, // 专栏 cv号
-    oid, // 直播 房间号 / 专栏 cv 号
+    oid, // 直播 房间号 / 专栏 cv 号 / 课程神秘标识符
   } = item.history
   const progressParam = item.progress > 0 ? `t=${item.progress}` : 't=0'
   const progress = item.progress === -1 ? 1 : item.progress / item.duration
@@ -152,12 +153,25 @@ const parseHistoryItem = (item: any): HistoryItem => {
     cover,
     covers: item.covers?.map(https) ?? [],
     progress,
-    progressText: Number.isNaN(progress) ? null : `${fixed(progress * 100, 1)}%`,
+    progressText: Number.isNaN(progress)
+      ? null
+      : `${formatDuration(item.progress)} / ${formatDuration(item.duration)}`,
     duration: item.duration,
     durationText: item.duration ? formatDuration(item.duration) : null,
     upName: item.author_name,
     upFaceUrl: https(item.author_face),
     upID: item.author_mid,
+  }
+  if (item.history.business === HistoryType.Cheese) {
+    return {
+      ...commonInfo,
+      id: oid,
+      upName: item.title,
+      title: item.show_title,
+      url: item.uri,
+      /** 特殊处理: 展示上分类仍归类到视频 */
+      type: HistoryType.Video,
+    }
   }
   if (epid) {
     return {
@@ -215,7 +229,15 @@ export const getHistoryItems = async (viewTime?: number, type?: TypeFilter) => {
   if (!Array.isArray(list)) {
     return []
   }
-  return (list as any[]).map(parseHistoryItem)
+  return (list as any[]).map(parseHistoryItem).filter(it => {
+    if (it === null) {
+      return false
+    }
+    if (type && type.name !== HistoryType.All) {
+      return it.type === type.name
+    }
+    return true
+  })
 }
 /**
  * 为历史记录项目分组, 包含`今天`, `昨天`, `本周`, `更早`

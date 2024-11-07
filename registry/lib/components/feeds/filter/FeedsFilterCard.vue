@@ -99,6 +99,9 @@ const sideCards: { [id: number]: SideCardType } = {
     displayName: '发布动态',
   },
 }
+if (getComponentSettings('extendFeedsLive').enabled) {
+  delete sideCards[3]
+}
 let cardsManager: typeof import('@/components/feeds/api').feedsCardsManager
 const sideBlock = 'feeds-filter-side-block-'
 
@@ -227,6 +230,7 @@ body.enable-feeds-filter:not(.disable-feeds-filter) {
   @include type-block();
   @include side-block();
   @include pattern-block();
+  @include plugin-block();
 }
 body.disable-feeds-filter {
   .feeds-filter-section {
@@ -293,7 +297,7 @@ body.disable-feeds-filter {
     }
   }
   h2 {
-    font-weight: bold;
+    @include semi-bold();
     font-size: 13px;
     margin: 0;
     margin-bottom: 8px;

@@ -38,7 +38,7 @@
         :title="topic.name"
         class="topic"
         target="_blank"
-        :href="'https://t.bilibili.com/topic/name/' + topic.name + '/feed'"
+        :href="topic.url || 'https://t.bilibili.com/topic/name/' + topic.name + '/feed'"
       >
         <VIcon icon="mdi-tag-outline" :size="14" />
         <div class="topic-name">
@@ -360,7 +360,7 @@ export default {
       left: 6px;
       background-color: var(--theme-color);
       color: var(--foreground-color);
-      font-weight: bold;
+      @include semi-bold();
       padding: 2px 8px;
       border-radius: 10px;
       height: 20px;
@@ -388,7 +388,6 @@ export default {
   .title {
     grid-area: title;
     font-size: 15px;
-    // font-weight: bold;
     @include semi-bold();
     color: inherit;
     padding: 4px 12px 0 12px;

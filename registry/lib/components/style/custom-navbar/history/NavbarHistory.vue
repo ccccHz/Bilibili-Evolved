@@ -26,7 +26,6 @@
         <div class="type-filters">
           <div v-for="t of types" :key="t.name" class="type-filter">
             <RadioButton
-              :title="(t.checked ? '不显示' : '显示') + t.displayName"
               :class="{ checked: t.checked }"
               :checked="t.checked"
               :disabled="loading"
@@ -48,7 +47,7 @@
           </div>
           <transition-group name="time-group" tag="div" class="time-group-items">
             <div v-for="h of g.items" :key="h.id" class="time-group-item">
-              <a class="cover-container" target="_blank" :href="h.url">
+              <a class="history-cover-container" target="_blank" :href="h.url">
                 <DpiImage
                   class="cover"
                   :src="h.cover"
@@ -60,16 +59,6 @@
                   class="progress"
                   :style="{ width: h.progress * 100 + '%' }"
                 ></div>
-                <div v-if="h.progressText" class="floating progress-number">
-                  {{ h.progress >= 1 ? '已看完' : h.progressText }}
-                </div>
-                <div
-                  v-if="h.liveStatus !== undefined"
-                  class="floating duration live-status"
-                  :class="{ on: h.liveStatus === 1 }"
-                >
-                  {{ h.liveStatus === 1 ? '直播中' : '未开播' }}
-                </div>
                 <div v-if="h.durationText" class="floating duration">{{ h.durationText }}</div>
               </a>
               <a class="title" target="_blank" :href="h.url" :title="h.title">{{
@@ -89,8 +78,25 @@
                 ></DpiImage>
                 <div class="up-name">{{ h.upName }}</div>
               </a>
-              <div v-if="h.timeText" class="time" :title="new Date(h.viewAt).toLocaleString()">
-                {{ h.timeText }}
+              <div class="history-info">
+                <div v-if="h.progressText" class="progress-number">
+                  {{ h.progress >= 0.95 ? '已看完' : h.progressText }}
+                </div>
+                <div
+                  v-if="h.liveStatus !== undefined"
+                  class="duration live-status"
+                  :class="{ on: h.liveStatus === 1 }"
+                >
+                  {{ h.liveStatus === 1 ? '直播中' : '未开播' }}
+                </div>
+                <span
+                  v-if="h.progressText || h.liveStatus !== undefined"
+                  class="history-info-separator"
+                  >|</span
+                >
+                <div v-if="h.timeText" class="time" :title="new Date(h.viewAt).toLocaleString()">
+                  {{ h.timeText }}
+                </div>
               </div>
             </div>
           </transition-group>
@@ -106,7 +112,7 @@
 </template>
 <script lang="ts">
 import { bilibiliApi, getJsonWithCredentials, postTextWithCredentials } from '@/core/ajax'
-import { formData, getCsrf } from '@/core/utils'
+import { getCsrf } from '@/core/utils'
 import { descendingSort } from '@/core/utils/sort'
 import {
   VButton,
@@ -119,7 +125,14 @@ import {
   DpiImage,
 } from '@/ui'
 import { popperMixin } from '../mixins'
-import { types, TypeFilter, HistoryItem, getHistoryItems, group, HistoryType } from './types'
+import {
+  navbarFilterTypes,
+  TypeFilter,
+  HistoryItem,
+  getHistoryItems,
+  group,
+  HistoryType,
+} from './types'
 
 export default Vue.extend({
   components: {
@@ -135,7 +148,7 @@ export default Vue.extend({
   mixins: [popperMixin],
   data() {
     return {
-      types,
+      types: navbarFilterTypes,
       search: '',
       viewTime: 0,
       cards: [],
@@ -164,10 +177,11 @@ export default Vue.extend({
   },
   methods: {
     toggleTypeFilter(typeFilter: TypeFilter) {
-      types.forEach(t => (t.checked = t.name === typeFilter.name))
+      navbarFilterTypes.forEach(t => (t.checked = t.name === typeFilter.name))
       this.reloadHistoryItems()
     },
     async reloadHistoryItems() {
+      this.cards = []
       this.viewTime = 0
       this.hasMorePage = true
       this.loading = true
@@ -178,8 +192,8 @@ export default Vue.extend({
       }
     },
     filterFunc(item: HistoryItem) {
-      const isAllType = types.find(it => it.name === HistoryType.All).checked
-      if (!isAllType && types.some(t => t.name === item.type && !t.checked)) {
+      const isAllType = navbarFilterTypes.find(it => it.name === HistoryType.All).checked
+      if (!isAllType && navbarFilterTypes.some(t => t.name === item.type && !t.checked)) {
         return false
       }
       if (
@@ -196,7 +210,7 @@ export default Vue.extend({
     async nextPage() {
       const items = await getHistoryItems(
         this.viewTime,
-        types.find(t => t.checked),
+        navbarFilterTypes.find(t => t.checked),
       )
       const cards: HistoryItem[] = lodash.uniqBy(
         this.cards.concat(items).sort(descendingSort((item: HistoryItem) => item.viewAt)),
@@ -228,10 +242,10 @@ export default Vue.extend({
         this.paused = targetState
         await postTextWithCredentials(
           'https://api.bilibili.com/x/v2/history/shadow/set',
-          formData({
+          new URLSearchParams({
             csrf: getCsrf(),
-            switch: targetState,
-          }),
+            switch: targetState.toString(),
+          }).toString(),
         )
       } catch (error) {
         this.paused = !targetState
@@ -381,7 +395,7 @@ export default Vue.extend({
                 opacity: 1;
               }
             }
-            .cover-container {
+            .history-cover-container {
               $height: 55px;
               $padding: 2px;
               grid-area: cover;
@@ -396,22 +410,6 @@ export default Vue.extend({
                 body.dark &.placeholder {
                   filter: invert(0.9);
                 }
-              }
-              .duration {
-                left: $padding;
-                bottom: $padding;
-                padding: 0 6px;
-              }
-              .live-status {
-                &.on {
-                  background-color: var(--theme-color);
-                  color: var(--foreground-color);
-                }
-              }
-              .progress-number {
-                left: $padding;
-                top: $padding;
-                padding: 0 6px;
               }
               .progress {
                 position: absolute;
@@ -440,7 +438,7 @@ export default Vue.extend({
               }
             }
             .up,
-            .time {
+            .history-info {
               font-size: 11px;
               opacity: 0.75;
               align-self: center;
@@ -471,10 +469,23 @@ export default Vue.extend({
                 }
               }
             }
-            .time {
+            .history-info {
+              @include h-center(4px);
               font-size: 11px;
               grid-area: time;
               padding-right: 6px;
+              &-separator {
+                margin: 0 4px;
+              }
+            }
+            .progress-number,
+            .live-status {
+              @include single-line();
+            }
+            .live-status {
+              &.on {
+                color: var(--theme-color);
+              }
             }
           }
         }

@@ -95,11 +95,10 @@ import { allQualities, VideoQuality } from '@/components/video/video-quality'
 import { Toast } from '@/core/toast'
 import { getFriendlyTitle } from '@/core/utils/title'
 import { bangumiBatchInput } from './inputs/bangumi/batch'
-import { videoBatchInput } from './inputs/video/batch'
+import { videoBatchInput, videoSeasonBatchInput } from './inputs/video/batch'
 import { videoSingleInput } from './inputs/video/input'
 import { videoDashAvc, videoDashHevc, videoDashAv1, videoAudioDash } from './apis/dash'
 import { videoFlv } from './apis/flv'
-import { toastOutput } from './outputs/toast'
 import { streamSaverOutput } from './outputs/stream-saver'
 import {
   DownloadVideoAction,
@@ -113,6 +112,7 @@ import {
 const [inputs] = registerAndGetData('downloadVideo.inputs', [
   videoSingleInput,
   videoBatchInput,
+  videoSeasonBatchInput,
   bangumiBatchInput,
 ] as DownloadVideoInput[])
 const [apis] = registerAndGetData('downloadVideo.apis', [
@@ -124,7 +124,6 @@ const [apis] = registerAndGetData('downloadVideo.apis', [
 ] as DownloadVideoApi[])
 const [assets] = registerAndGetData('downloadVideo.assets', [] as DownloadVideoAssets[])
 const [outputs] = registerAndGetData('downloadVideo.outputs', [
-  toastOutput,
   streamSaverOutput,
 ] as DownloadVideoOutput[])
 const { basicConfig } = getComponentSettings('downloadVideo').options as {
@@ -331,19 +330,15 @@ export default Vue.extend({
           })
         }
         const action = new DownloadVideoAction(videoInfos)
-        const extraAssets = (
-          await Promise.all(
-            assets.map(a =>
-              a.getAssets(
-                videoInfos,
-                this.$refs.assetsOptions.find((c: any) => c.$attrs.name === a.name),
-              ),
-            ),
-          )
-        ).flat()
-        action.extraAssets.push(...extraAssets)
-        await action.downloadExtraAssets()
+        assets.forEach(a => {
+          const assetsType = a?.getUrls ? action.extraOnlineAssets : action.extraAssets
+          assetsType.push({
+            asset: a,
+            instance: this.$refs.assetsOptions.find((c: any) => c.$attrs.name === a.name),
+          })
+        })
         await output.runAction(action, instance)
+        await action.downloadExtraAssets()
       } catch (error) {
         logError(error)
       } finally {
@@ -385,7 +380,7 @@ export default Vue.extend({
 
     .title {
       font-size: 16px;
-      font-weight: bold;
+      @include semi-bold();
       flex-grow: 1;
       margin: 0 8px;
     }

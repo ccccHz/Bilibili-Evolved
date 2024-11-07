@@ -1,4 +1,4 @@
-import { newSwitchComponentWrapper, defineSwitchMetadata } from '@/components/switch-options'
+import { wrapSwitchOptions, defineSwitchMetadata } from '@/components/switch-options'
 
 import { addComponentListener, getComponentSettings } from '@/core/settings'
 import { sq } from '@/core/spin-query'
@@ -9,12 +9,11 @@ import { mainSiteUrls } from '@/core/utils/urls'
 
 const switchMetadata = defineSwitchMetadata({
   name: 'simplifyOptions',
-  dimAt: 'checked',
-  switchProps: {
-    checkedIcon: 'mdi-eye-off-outline',
-    notCheckedIcon: 'mdi-eye-outline',
-  },
   switches: {
+    carousel: {
+      defaultValue: false,
+      displayName: '轮播图',
+    },
     categories: {
       defaultValue: false,
       displayName: '分区栏',
@@ -47,7 +46,7 @@ const switchMetadata = defineSwitchMetadata({
 })
 const console = useScopedConsole('简化首页')
 
-export const component = newSwitchComponentWrapper(switchMetadata)({
+export const component = wrapSwitchOptions(switchMetadata)({
   name: 'simplifyHome',
   displayName: '简化首页',
   description: '隐藏原版首页不需要的元素 / 分区.',
@@ -79,15 +78,17 @@ export const component = newSwitchComponentWrapper(switchMetadata)({
           () => dqa('.proxy-box > div'),
           elements => elements.length > 0 || !isHome,
         )
-        return Object.fromEntries(
-          categoryElements.map(it => [
-            it.id.replace(/^bili_/, ''),
-            {
-              displayName: it.querySelector('header .name')?.textContent?.trim() ?? '未知分区',
-              defaultValue: false,
-            },
-          ]),
-        )
+        return categoryElements
+          ? Object.fromEntries(
+              categoryElements.map(it => [
+                it.id.replace(/^bili_/, ''),
+                {
+                  displayName: it.querySelector('header .name')?.textContent?.trim() ?? '未知分区',
+                  defaultValue: false,
+                },
+              ]),
+            )
+          : {}
       }
 
       const skipIds = ['推广']

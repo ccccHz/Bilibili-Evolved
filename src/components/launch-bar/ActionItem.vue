@@ -2,13 +2,13 @@
   <div
     tabindex="0"
     class="be-launch-bar-action-item suggest-item"
-    :title="action.name"
+    :title="action.displayName || action.name"
     :data-indexer="action.indexer"
     @click.self="performAction($event)"
     @keydown.enter.prevent.stop="performAction($event)"
     @keydown.shift.delete.prevent.stop="performDelete($event)"
-    @keydown.up.prevent.stop="$emit('previous-item', $event)"
-    @keydown.down.prevent.stop="$emit('next-item', $event)"
+    @keydown.up.prevent.stop="$emit('previous-item', $event.currentTarget)"
+    @keydown.down.prevent.stop="$emit('next-item', $event.currentTarget)"
   >
     <div class="suggest-item-content">
       <div v-if="action.icon" class="suggest-item-icon" @click="performAction($event)">
@@ -22,9 +22,9 @@
           :name="action.name"
         ></component>
         <div v-else class="suggest-item-name">
-          {{ action.title || action.name }}
+          {{ action.displayName || action.name }}
         </div>
-        <div v-if="action.description" class="suggest-item-description">
+        <div v-if="action.description" class="suggest-item-description" :title="action.description">
           {{ action.description }}
         </div>
       </div>
@@ -54,15 +54,17 @@ export default Vue.extend({
   },
   methods: {
     async performAction(event: KeyboardEvent | MouseEvent) {
+      const { currentTarget } = event
       await this.action.action()
-      this.$emit('action', event)
+      this.$emit('action', currentTarget)
     },
     async performDelete(event: KeyboardEvent | MouseEvent) {
+      const { currentTarget } = event
       if (!this.action.deleteAction) {
         return
       }
       await this.action.deleteAction()
-      this.$emit('delete-item', event)
+      this.$emit('delete-item', currentTarget)
     },
   },
 })
@@ -109,6 +111,7 @@ export default Vue.extend({
   &-description {
     opacity: 0.5;
     font-size: smaller;
+    @include single-line();
   }
   &-delete {
     opacity: 0.5;

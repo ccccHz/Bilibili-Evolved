@@ -8,6 +8,31 @@ declare global {
 
   const lodash: LoDashStatic
   const Vue: typeof import('vue/types/umd')
+  type Vue = import('vue/types/umd')
+
+  type EnumEventTarget<EventTypes extends string> = EventTarget & {
+    addEventListener(
+      type: EventTypes,
+      callback: EventListenerOrEventListenerObject | null,
+      options?: AddEventListenerOptions | boolean,
+    ): void
+    removeEventListener(
+      type: EventTypes,
+      callback: EventListenerOrEventListenerObject | null,
+      options?: EventListenerOptions | boolean,
+    ): void
+  }
+  interface NetworkInformation extends EnumEventTarget<'change'> {
+    downlink: number
+    downlinkMax: number
+    effectiveType: string
+    rtt: number
+    saveData: boolean
+    type: string
+  }
+  interface Navigator {
+    connection?: NetworkInformation
+  }
 
   interface GitInfo {
     commitHash: string
@@ -142,4 +167,10 @@ declare global {
   function GM_deleteValue(name: string): void
   function GM_getResourceText(name: string): string
   function GM_getResourceURL(name: string): string
+  function GM_registerMenuCommand(
+    name: string,
+    callback: (event: MouseEvent | KeyboardEvent) => void,
+    accessKey?: string,
+  ): string
+  function GM_unregisterMenuCommand(menuId: string): void
 }

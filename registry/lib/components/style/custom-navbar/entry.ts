@@ -1,6 +1,8 @@
 import { ComponentEntry } from '@/components/types'
 import { addComponentListener } from '@/core/settings'
 import { isIframe, isNotHtml, matchUrlPattern, mountVueComponent } from '@/core/utils'
+import { setupNotifyStyle } from './notify-style'
+import { setupLinkPopupContentAlignStyle } from './link-popup-content-align-style'
 
 export const entry: ComponentEntry = async ({ metadata: { name } }) => {
   // const url = document.URL.replace(location.search, '')
@@ -20,9 +22,17 @@ export const entry: ComponentEntry = async ({ metadata: { name } }) => {
     },
     true,
   )
+  addComponentListener(
+    `${name}.searchBarWidth`,
+    value => {
+      document.documentElement.style.setProperty('--navbar-search-width', `${value}vw`)
+    },
+    true,
+  )
   const globalFixedExclude = [
     'https://space.bilibili.com',
     'https://www.bilibili.com/read',
+    'https://www.bilibili.com/opus',
     'https://www.bilibili.com/account/history',
   ]
   if (!globalFixedExclude.some(p => matchUrlPattern(p))) {
@@ -34,6 +44,10 @@ export const entry: ComponentEntry = async ({ metadata: { name } }) => {
       true,
     )
   }
+  // https://github.com/the1812/Bilibili-Evolved/issues/4459
+  if (matchUrlPattern('https://www.bilibili.com/account/history')) {
+    document.body.classList.add('history-page')
+  }
   const CustomNavbar = await import('./CustomNavbar.vue')
   const customNavbar: Vue & {
     styles: string[]
@@ -43,4 +57,6 @@ export const entry: ComponentEntry = async ({ metadata: { name } }) => {
   ;['fill', 'shadow', 'blur'].forEach(style => {
     addComponentListener(`${name}.${style}`, value => customNavbar.toggleStyle(value, style), true)
   })
+  setupNotifyStyle()
+  setupLinkPopupContentAlignStyle()
 }

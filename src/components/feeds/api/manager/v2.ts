@@ -1,12 +1,7 @@
 import { childList } from '@/core/observer'
 import { descendingStringSort } from '@/core/utils/sort'
-import { pascalCase } from '@/core/utils'
-import {
-  createNodeValidator,
-  FeedsCardsManager,
-  FeedsCardsManagerEventType,
-  getVueData,
-} from './base'
+import { pascalCase, getVue2Data } from '@/core/utils'
+import { createNodeValidator, FeedsCardsManager, FeedsCardsManagerEventType } from './base'
 import { FeedsCard, FeedsCardType, feedsCardTypes, isRepostType } from '../types'
 import { selectAll } from '@/core/spin-query'
 
@@ -48,30 +43,37 @@ const getText = (dynamicModule: any, cardType: FeedsCardType) => {
     return text
   }
   const { desc: mainDesc, major } = dynamicModule
-  const mainText = mainDesc?.text ?? ''
-  let typeText = ''
-  switch (cardType) {
-    default: {
-      break
+  const mainText = (() => {
+    if (major?.opus) {
+      return lodash.get(major.opus, 'summary.text')
     }
-    case feedsCardTypes.bangumi:
-    case feedsCardTypes.column:
-    case feedsCardTypes.video: {
-      const target = major.archive ?? major.pgc ?? major.article
-      if (target) {
-        const { title, desc } = target
-        typeText = combineText(title, desc)
-      } else if (major.opus) {
-        const { title, summary } = major.opus
-        typeText = combineText(title, summary.text)
+    return mainDesc?.text ?? ''
+  })()
+  const typeText = (() => {
+    switch (cardType) {
+      default: {
+        return ''
       }
-      break
+      case feedsCardTypes.bangumi:
+      case feedsCardTypes.column:
+      case feedsCardTypes.video: {
+        const target = major.archive ?? major.pgc ?? major.article
+        if (target) {
+          const { title, desc } = target
+          return combineText(title, desc)
+        }
+        if (major.opus) {
+          const { title, summary } = major.opus
+          return combineText(title, summary.text)
+        }
+        return ''
+      }
     }
-  }
+  })()
   return combineText(mainText, typeText)
 }
 const parseCard = async (element: HTMLElement): Promise<FeedsCard> => {
-  const vueData = getVueData(element)
+  const vueData = getVue2Data(element)
   const parseModules = (rawModules: any) => {
     if (Array.isArray(rawModules)) {
       return Object.fromEntries(
@@ -150,7 +152,7 @@ export class FeedsCardsManagerV2 extends FeedsCardsManager {
     if (!isNodeValid(node)) {
       return
     }
-    const vueData = getVueData(node)
+    const vueData = getVue2Data(node)
     if (!vueData) {
       return
     }
