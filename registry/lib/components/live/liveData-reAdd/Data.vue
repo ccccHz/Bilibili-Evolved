@@ -1,7 +1,7 @@
 <!-- live-skin-normal-text 是darkmode设置的style -->
 <template>
-  <div class="live-data live-skin-normal-text">
-    <div class="live-data__content">
+  <div class="live-data">
+    <div class="live-data live-skin-normal-text">
       房间观众(<span class="live-data__item-value viewer">{{ viewer }}) </span>
 
       大航海(<span class="live-data__item-value pilot">{{ pilot }})</span>
