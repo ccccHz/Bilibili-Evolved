@@ -28,27 +28,30 @@ const entry = async () => {
       }
     }
   }
-  const decideToChange = () => {
-    if (video.paused) {
-      video.addEventListener('play', changeQuailty)
-    } else {
-      changeQuailty()
-    }
+  if (video !== null) {
+    changeQuailty()
   }
+  // const decideToChange = () => {
+  //   if (video.paused) {
+  //     video.addEventListener('play', changeQuailty)
+  //   } else {
+  //     changeQuailty()
+  //   }
+  // }
 
   // 等待livePlayer加载
-  const interval: NodeJS.Timer = setInterval(() => {
-    let { livePlayer } = unsafeWindow
-    const p2pLivePlayer = unsafeWindow.$P2PLivePlayer
-    if (typeof livePlayer === 'undefined' && typeof p2pLivePlayer === 'undefined') {
-      return
-    }
-    clearInterval(interval)
-    if (typeof livePlayer === 'undefined') {
-      livePlayer = p2pLivePlayer
-    }
-    decideToChange()
-  }, 10)
+  // const interval: NodeJS.Timer = setInterval(() => {
+  //   let { livePlayer } = unsafeWindow
+  //   const p2pLivePlayer = unsafeWindow.$P2PLivePlayer
+  //   if (typeof livePlayer === 'undefined' && typeof p2pLivePlayer === 'undefined') {
+  //     return
+  //   }
+  //   clearInterval(interval)
+  //   if (typeof livePlayer === 'undefined') {
+  //     livePlayer = p2pLivePlayer
+  //   }
+  //   decideToChange()
+  // }, 10)
 }
 export const component = defineComponentMetadata({
   name: 'liveAutoResolution',
@@ -64,6 +67,6 @@ export const component = defineComponentMetadata({
   ],
   tags: [componentsTags.live, componentsTags.style],
   entry,
-  reload: entry,
+  // reload: entry,
   urlInclude: liveUrls,
 })

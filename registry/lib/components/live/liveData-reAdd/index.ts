@@ -1,7 +1,6 @@
 import { liveUrls } from '@/core/utils/urls'
 import { defineComponentMetadata } from '@/components/define'
 import { mountVueComponent } from '@/core/utils'
-import { select } from '@/core/spin-query'
 import { waitForControlBar } from '@/components/live/live-control-bar'
 
 const entry = async () => {
