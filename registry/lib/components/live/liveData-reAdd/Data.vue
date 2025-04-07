@@ -39,9 +39,10 @@ export default Vue.extend({
       if (element) {
         const updateValue = () => {
           console.log(`Updating ${keyword}...`)
-          const regex = new RegExp(`${keyword}\\((\\d+)\\)`)
+          // const regex = new RegExp(`${keyword}\\((\\.+)\\)`)
+          const regex = new RegExp(`${keyword}\\(([^)]+)\\)`) // 匹配括号内的任意内容
           const match = element.innerHTML.match(regex)
-          this[dataKey] = match ? parseInt(match[1]) : 0
+          this[dataKey] = match ? match[1] : 0
           console.log(`Updated ${keyword}:`, this[dataKey])
         }
 
