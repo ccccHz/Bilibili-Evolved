@@ -82,4 +82,14 @@ export const buildByEntry = (params: {
     ],
   }
   return config
+  // return {
+  //   ...config,
+  //   resolve: {
+  //     ...config.resolve,
+  //     fallback: {
+  //       ...config.resolve?.fallback,
+  //       events: require.resolve('events/'),
+  //     },
+  //   },
+  // }
 }
