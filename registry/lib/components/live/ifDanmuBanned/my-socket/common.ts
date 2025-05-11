@@ -1,5 +1,4 @@
-import { EventEmitter } from 'events'
-
+import { EventEmitter, NiceEventEmitter, relayEvent } from './event-emitter'
 import { encoder, makeDecoder, Inflates } from './buffer'
 
 export type LiveOptions = {
@@ -10,15 +9,7 @@ export type LiveOptions = {
   buvid?: string
 }
 
-export const relayEvent = Symbol('relay')
-
-class NiceEventEmitter extends EventEmitter {
-  emit(eventName: string | symbol, ...params: any[]) {
-    super.emit(eventName, ...params)
-    super.emit(relayEvent, eventName, ...params)
-    return true
-  }
-}
+export { relayEvent }
 
 export class Live extends NiceEventEmitter {
   roomid: number

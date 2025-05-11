@@ -1,6 +1,6 @@
-import { EventEmitter } from 'events'
 import { Agent } from 'http'
 
+import { EventEmitter } from './event-emitter'
 import { Inflates } from './buffer'
 import { LiveOptions, Live } from './common'
 

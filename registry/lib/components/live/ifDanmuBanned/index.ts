@@ -72,15 +72,14 @@ async function createWS(): Promise<KeepLiveWS> {
   live.on('close', () => console.log('Connection is closed'))
   live.on('live', () => {
     console.log('Live event triggered')
-    live.on('heartbeat', online => console.log('Heartbeat received, online:', online))
-    live.on('DANMU_MSG', msg => {
-      console.log(
-        'dammu received:\n',
-        `${msg.info?.[2]?.[1] ?? 'unknown'}:${msg.info?.[1] ?? 'unknown'}`,
-      )
-    })
   })
-
+  live.on('heartbeat', online => console.log('Heartbeat received, online:', online))
+  live.on('DANMU_MSG', msg => {
+    console.log(
+      'dammu received:\n',
+      `${msg.info?.[2]?.[1] ?? 'unknown'}:${msg.info?.[1] ?? 'unknown'}`,
+    )
+  })
   return live
 }
 
