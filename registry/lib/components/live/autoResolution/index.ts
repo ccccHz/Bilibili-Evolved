@@ -2,6 +2,11 @@ import { defineComponentMetadata } from '@/components/define'
 import { getUID } from '@/core/utils'
 import { liveUrls } from '@/core/utils/urls'
 
+type candidate = {
+  desc: string
+  qn: number
+  hdrType: number
+}
 const entry = async () => {
   if (!getUID()) {
     return
@@ -15,12 +20,14 @@ const entry = async () => {
       livePlayer = unsafeWindow.top.livePlayer
     }
     const info = livePlayer.getPlayerInfo()
-    if (info.qualityCandidates.length > 1) {
-      console.log(info.qualityCandidates)
-      for (let index = 0; index < info.qualityCandidates.length; index++) {
+    const candidates: [candidate] = info.qualityCandidates
+    if (candidates.length > 1) {
+      console.log(candidates)
+      for (let index = 0; index < candidates.length; index++) {
         // 想要默认其他画质,请修改"原画"为"原画PRO"诸如此类
-        if (info.qualityCandidates[index].desc === '原画') {
-          livePlayer.switchQuality(info.qualityCandidates[index].qn)
+        if (candidates[index].desc.includes('原画')) {
+          livePlayer.switchQuality(candidates[index].qn)
+          return
         }
         // else{
         //  livePlayer.switchQuality(info.qualityCandidates[0].qn)
