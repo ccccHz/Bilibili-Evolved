@@ -26,12 +26,13 @@ const entry = async () => {
       for (let index = 0; index < candidates.length; index++) {
         // 想要默认其他画质,请修改"原画"为"原画PRO"诸如此类
         if (candidates[index].desc.includes('原画')) {
+          console.log('切换到原画', candidates[index].desc)
           livePlayer.switchQuality(candidates[index].qn)
           return
         }
-        // else{
-        //  livePlayer.switchQuality(info.qualityCandidates[0].qn)
-        // }
+        livePlayer.switchQuality(info.qualityCandidates[0].qn)
+        console.log('切换到', info.qualityCandidates[0].desc)
+        return
       }
     }
   }
