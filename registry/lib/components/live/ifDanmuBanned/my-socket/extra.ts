@@ -1,3 +1,5 @@
+import { WbiSign } from './sign'
+
 type GET_DANMU_INFO = {
   code: number
   message: string
@@ -19,10 +21,17 @@ type GET_DANMU_INFO = {
 }
 
 export const getConf = async (roomid: number) => {
+  const query = {
+    id: roomid,
+    type: 0,
+    wts: Math.floor(Date.now() / 1000),
+  }
+  const signedQuery = await WbiSign(query)
   // eslint-disable-next-line @typescript-eslint/no-var-requires
   const raw = (await fetch(
-    `https://api.live.bilibili.com/xlive/web-room/v1/index/getDanmuInfo?id=${roomid}`,
+    `https://api.live.bilibili.com/xlive/web-room/v1/index/getDanmuInfo?${signedQuery}`,
   ).then(w => w.json())) as GET_DANMU_INFO
+
   const {
     data: {
       token: key,
