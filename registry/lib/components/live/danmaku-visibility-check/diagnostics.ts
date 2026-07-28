@@ -10,6 +10,19 @@ const sendLatencySafetyMargin = 100
 const maximumDynamicSendLatencyP95 = fallbackSendMatchTimeout - sendLatencySafetyMargin
 const sendLatencySampleLimit = 30
 const arrivalCacheLimit = 200
+const diagnosticLoggingEnabled = false
+
+const logDiagnostic = (...args: unknown[]) => {
+  if (diagnosticLoggingEnabled) {
+    console.log(...args)
+  }
+}
+
+const warnDiagnostic = (...args: unknown[]) => {
+  if (diagnosticLoggingEnabled) {
+    console.warn(...args)
+  }
+}
 
 type NicknameEvidence = 'exact' | 'masked' | 'prefix' | 'mismatch' | 'unavailable'
 
@@ -106,6 +119,7 @@ export class DanmakuDiagnostics {
   private pageArrivals = new Map<string, number>()
   private observerMinusPageSamples: number[] = []
   private sendEndToEndSamples: number[] = []
+  private pairedArrivalCount = 0
 
   constructor(
     private componentName: string,
@@ -115,8 +129,10 @@ export class DanmakuDiagnostics {
   ) {}
 
   start() {
-    this.timer = window.setInterval(() => this.logSummary('periodic'), summaryInterval)
-    console.log(this.componentName, 'diagnostic started')
+    if (diagnosticLoggingEnabled) {
+      this.timer = window.setInterval(() => this.logSummary('periodic'), summaryInterval)
+      logDiagnostic(this.componentName, 'diagnostic started')
+    }
   }
 
   captureSend(content: string) {
@@ -140,28 +156,32 @@ export class DanmakuDiagnostics {
       }
       this.snapshot.timedOutSends += 1
       const waitedMs = Date.now() - pending.capturedAt
-      console.warn(
-        this.componentName,
-        'captured danmaku not observed within diagnostic window',
-        JSON.stringify({
-          content: pending.content,
-          waitedMs,
-          conclusion: 'not-observed',
-        }),
-      )
+      if (diagnosticLoggingEnabled) {
+        warnDiagnostic(
+          this.componentName,
+          'captured danmaku not observed within diagnostic window',
+          JSON.stringify({
+            content: pending.content,
+            waitedMs,
+            conclusion: 'not-observed',
+          }),
+        )
+      }
       this.callbacks.onNotObserved?.({ content: pending.content, waitedMs })
     }, matchTimeout)
     this.pendingSends.push({ id, content: normalizedContent, capturedAt, timeout })
     this.snapshot.capturedSends += 1
-    console.log(
-      this.componentName,
-      'send captured',
-      JSON.stringify({
-        content: normalizedContent,
-        timeoutMs: matchTimeout,
-        calibratedFromPairs: this.observerMinusPageSamples.length,
-      }),
-    )
+    if (diagnosticLoggingEnabled) {
+      logDiagnostic(
+        this.componentName,
+        'send captured',
+        JSON.stringify({
+          content: normalizedContent,
+          timeoutMs: matchTimeout,
+          calibratedFromPairs: this.observerMinusPageSamples.length,
+        }),
+      )
+    }
   }
 
   recordPageDanmaku(arrival: PageDanmakuArrival) {
@@ -210,36 +230,40 @@ export class DanmakuDiagnostics {
         this.sendEndToEndSamples.splice(0, this.sendEndToEndSamples.length - sendLatencySampleLimit)
       }
       this.snapshot.matchedSends += 1
-      console.log(
-        this.componentName,
-        'captured danmaku observed',
-        JSON.stringify({
-          content: danmaku.content,
-          latencyMs: sendEndToEndMs,
-          identitySource: danmaku.identitySource,
-          sendFromMe: danmaku.sendFromMe,
-          hasMessageId: danmaku.messageId !== null,
-          nicknameEvidence: getNicknameEvidence(this.currentUsername, danmaku.username),
-          nextTimeoutMs: this.getSendMatchTimeout(),
-          conclusion: 'observed',
-        }),
-      )
+      if (diagnosticLoggingEnabled) {
+        logDiagnostic(
+          this.componentName,
+          'captured danmaku observed',
+          JSON.stringify({
+            content: danmaku.content,
+            latencyMs: sendEndToEndMs,
+            identitySource: danmaku.identitySource,
+            sendFromMe: danmaku.sendFromMe,
+            hasMessageId: danmaku.messageId !== null,
+            nicknameEvidence: getNicknameEvidence(this.currentUsername, danmaku.username),
+            nextTimeoutMs: this.getSendMatchTimeout(),
+            conclusion: 'observed',
+          }),
+        )
+      }
     }
     if (danmaku.uid === this.currentUid || danmaku.sendFromMe === true) {
       this.snapshot.own += 1
-      console.log(
-        this.componentName,
-        'own danmaku observed',
-        JSON.stringify({
-          content: danmaku.content,
-          sentAt: danmaku.sentAt,
-          identitySource: danmaku.identitySource,
-          sendFromMe: danmaku.sendFromMe,
-          hasMessageId: danmaku.messageId !== null,
-        }),
-      )
-    } else if (this.snapshot.parsed <= sampleLimit) {
-      console.log(
+      if (diagnosticLoggingEnabled) {
+        logDiagnostic(
+          this.componentName,
+          'own danmaku observed',
+          JSON.stringify({
+            content: danmaku.content,
+            sentAt: danmaku.sentAt,
+            identitySource: danmaku.identitySource,
+            sendFromMe: danmaku.sendFromMe,
+            hasMessageId: danmaku.messageId !== null,
+          }),
+        )
+      }
+    } else if (diagnosticLoggingEnabled && this.snapshot.parsed <= sampleLimit) {
+      logDiagnostic(
         this.componentName,
         'diagnostic sample',
         JSON.stringify({
@@ -288,6 +312,7 @@ export class DanmakuDiagnostics {
     }
     this.observerArrivals.delete(messageId)
     this.pageArrivals.delete(messageId)
+    this.pairedArrivalCount += 1
     this.observerMinusPageSamples.push(observerAt - pageAt)
     if (this.observerMinusPageSamples.length > latencySampleLimit) {
       this.observerMinusPageSamples.splice(
@@ -295,11 +320,10 @@ export class DanmakuDiagnostics {
         this.observerMinusPageSamples.length - latencySampleLimit,
       )
     }
-    const sampleCount = this.observerMinusPageSamples.length
     if (
-      sampleCount === 1 ||
-      sampleCount === latencyCalibrationMinimumSamples ||
-      sampleCount % 20 === 0
+      this.pairedArrivalCount === 1 ||
+      this.pairedArrivalCount === latencyCalibrationMinimumSamples ||
+      this.pairedArrivalCount % 20 === 0
     ) {
       this.logLatencyCalibration()
     }
@@ -366,11 +390,21 @@ export class DanmakuDiagnostics {
   }
 
   private logLatencyCalibration() {
-    console.log(this.componentName, 'latency calibration', JSON.stringify(this.getLatencySummary()))
+    if (!diagnosticLoggingEnabled) {
+      return
+    }
+    logDiagnostic(
+      this.componentName,
+      'latency calibration',
+      JSON.stringify(this.getLatencySummary()),
+    )
   }
 
   private logSummary(reason: 'first-message' | 'periodic' | 'stopped') {
-    console.log(
+    if (!diagnosticLoggingEnabled) {
+      return
+    }
+    logDiagnostic(
       this.componentName,
       'diagnostic summary',
       JSON.stringify({

@@ -17,12 +17,19 @@ const sendButtonSelector = 'button.send-btn'
 const customSendbarInputSelector = '.danmaku-send-bar input'
 const chatHistorySelector = '.chat-history-list'
 const danmakuItemSelector = '.danmaku-item[data-id_str]'
+const diagnosticLoggingEnabled = false
 let observer: LaplaceDanmakuObserver | null = null
 let diagnostics: DanmakuDiagnostics | null = null
 let removeObserverListeners: (() => void) | null = null
 let lifecycleVersion = 0
 let activeNotice: ReturnType<typeof Toast.mini> | null = null
 let noticeTimer = 0
+
+const logDiagnostic = (...args: unknown[]) => {
+  if (diagnosticLoggingEnabled) {
+    console.log(...args)
+  }
+}
 
 const showMiniNotice = (message: string) => {
   if (noticeTimer) {
@@ -93,7 +100,7 @@ const entry = async () => {
     const userInfo = (await getUserInfo()) as { uname?: unknown }
     currentUsername = typeof userInfo.uname === 'string' ? userInfo.uname : null
   } catch (error) {
-    console.warn(componentName, 'failed to load nickname evidence', error)
+    logDiagnostic(componentName, 'failed to load nickname evidence', error)
   }
   if (entryVersion !== lifecycleVersion) {
     return
@@ -105,7 +112,7 @@ const entry = async () => {
         showMiniNotice('无法判断弹幕可见性')
         return
       }
-      console.log(componentName, 'showing possible block notice', { waitedMs })
+      logDiagnostic(componentName, 'showing possible block notice', { waitedMs })
       showMiniNotice(`「${content}」可能被屏蔽`)
     },
   })
@@ -113,7 +120,7 @@ const entry = async () => {
     nextDiagnostics.record(true, (event as CustomEvent<ObservedDanmaku | null>).detail)
   }
   const onStatus = (event: Event) => {
-    console.log(componentName, 'observer status', (event as CustomEvent).detail)
+    logDiagnostic(componentName, 'observer status', (event as CustomEvent).detail)
   }
   nextObserver.addEventListener('danmaku', onDanmaku)
   nextObserver.addEventListener('status', onStatus)
@@ -136,7 +143,7 @@ const entry = async () => {
       nextObserver.close()
       return
     }
-    console.log(componentName, 'Laplace observer ready', {
+    logDiagnostic(componentName, 'Laplace observer ready', {
       roomId: config.roomId,
       address: config.address,
       hasBuvid: Boolean(config.buvid),
@@ -151,7 +158,7 @@ const entry = async () => {
       source: 'button-click' | 'original-enter' | 'custom-enter',
       content: string,
     ) => {
-      console.log(componentName, 'send interaction detected', {
+      logDiagnostic(componentName, 'send interaction detected', {
         source,
         hasContent: Boolean(content.trim()),
       })
@@ -206,7 +213,7 @@ const entry = async () => {
       document.removeEventListener('keydown', onDocumentKeyDown, true)
       pageDanmakuObserver.disconnect()
     }
-    console.log(componentName, 'send capture and page latency calibration ready')
+    logDiagnostic(componentName, 'send capture and page latency calibration ready')
   } catch (error) {
     if (entryVersion !== lifecycleVersion) {
       return
