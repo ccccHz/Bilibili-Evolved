@@ -38,6 +38,7 @@ jobs:
           cd registry
           pnpm install
           cd ../
+          pnpm --dir registry/lib/components/live/danmaku-visibility-check install --frozen-lockfile
           pnpm run build-features
       - name: Log
         run: echo Check complete.
