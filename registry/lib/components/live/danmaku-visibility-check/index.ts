@@ -220,10 +220,6 @@ const entry = async () => {
 export const component = defineComponentMetadata({
   name: componentName,
   displayName: '直播弹幕公开可见性检测',
-  description: {
-    'zh-CN':
-      '通过独立观察连接检测已成功发送的弹幕是否出现在公开弹幕流中. 当前为实验版本, 暂不判定或提示弹幕是否受限.',
-  },
   author: {
     name: 'ccccHz',
     link: 'https://github.com/ccccHz',

@@ -54,9 +54,9 @@
 
 已知限制:
 
-- Laplace 8.0.3 的声明文件要求 TypeScript 5.7+, 而当前 Bilibili Evolved 使用
-  TypeScript 4.9. 因此运行时导入被隔离在 `laplace-runtime.js` 中, 业务代码使用本地
-  最小接口进行类型检查.
+- Evo Local 已升级到 TypeScript 5.8.3, 但 Laplace 8.0.3 当前的内部包仍声明
+  TypeScript 7 peer 依赖. 因此运行时导入继续隔离在 `laplace-runtime.js` 中,
+  业务代码使用本地最小接口进行类型检查.
 - 浏览器入口不负责获取房间 token 和 WebSocket 地址. 当前配置适配器调用
   `room/v1/Room/mobileRoomInit` 和 `room/v1/Danmu/getConf`.
 - Laplace 会把 operation 8 解释为 `live` 事件, 当前额外等待首次心跳来确认连接可用,
