@@ -1,4 +1,3 @@
-// @laplace.live/ws 8.0.3 requires TypeScript 5.7+ for its declaration files.
-// Keep the runtime import behind this JavaScript boundary so Bilibili Evolved
-// can continue type-checking with TypeScript 4.9.
+// Keep Laplace's runtime and type declarations behind a JavaScript boundary.
+// This component owns the pinned dependency; the Evo registry does not.
 export { LiveWS } from '@laplace.live/ws/browser'

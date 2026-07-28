@@ -85,14 +85,4 @@ export const buildByEntry = (params: {
     return enableProductionSourceMap(config, `registry/dist/${type}s/`)
   }
   return config
-  // return {
-  //   ...config,
-  //   resolve: {
-  //     ...config.resolve,
-  //     fallback: {
-  //       ...config.resolve?.fallback,
-  //       events: require.resolve('events/'),
-  //     },
-  //   },
-  // }
 }

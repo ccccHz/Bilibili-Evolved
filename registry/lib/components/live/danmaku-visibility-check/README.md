@@ -55,6 +55,14 @@
 - mini Toast 优先锚定当前聚焦的原生或 Evo 弹幕输入框, 使用 `top-start`
   显示在输入区域上方. 独立暖橙红主题提供白字、描边和阴影, 不影响其他 Evo Toast.
 
+本地依赖:
+
+- 该组件独立固定 `@laplace.live/ws`, 不修改 Evo registry 的全局依赖或
+  Webpack 配置.
+- 首次拉取源码或更新锁文件后, 在本目录执行 `pnpm install --frozen-lockfile`,
+  然后再从仓库根目录启动 Dev Server 或构建组件.
+- 已构建的模块文件不要求使用者安装这项依赖.
+
 已知限制:
 
 - Evo Local 已升级到 TypeScript 5.8.3, 但 Laplace 8.0.3 当前的内部包仍声明
