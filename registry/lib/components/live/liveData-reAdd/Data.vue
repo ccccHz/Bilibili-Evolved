@@ -35,15 +35,15 @@ export default Vue.extend({
   methods: {
     async fetchData(selector: string, keyword: string, dataKey: string) {
       const element = await select(() => dq(selector))
-      console.log(`Element for ${keyword}:`, element)
+      // console.log(`Element for ${keyword}:`, element)
       if (element) {
         const updateValue = () => {
-          console.log(`Updating ${keyword}...`)
+          // console.log(`Updating ${keyword}...`)
           // const regex = new RegExp(`${keyword}\\((\\.+)\\)`)
           const regex = new RegExp(`${keyword}\\(([^)]+)\\)`) // 匹配括号内的任意内容
           const match = element.innerHTML.match(regex)
           this[dataKey] = match ? match[1] : 0
-          console.log(`Updated ${keyword}:`, this[dataKey])
+          // console.log(`Updated ${keyword}:`, this[dataKey])
         }
 
         // Initial fetch
