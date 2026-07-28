@@ -6,6 +6,8 @@ on:
       - master
       - master-cdn
       - preview
+permissions:
+  contents: read
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -13,12 +15,6 @@ jobs:
       - uses: actions/checkout@v3
         with:
           fetch-depth: "0"
-      - name: Setup git
-        run: |-
-          git config --local user.email github-actions[bot]@users.noreply.github.com
-          git config --local user.name github-actions[bot]
-          git config --global core.autocrlf true
-          git config --global core.safecrlf false
       - name: Install dependencies
         uses: pnpm/action-setup@v4
         with:
@@ -26,7 +22,7 @@ jobs:
       - name: Type check
         run: pnpm run type
       - name: ESLint check
-        run: pnpm run lint
+        run: pnpm run lint-check
       - name: Build core
         run: pnpm run build-core
       - name: Build features
@@ -36,18 +32,3 @@ jobs:
           cd ../
           pnpm --dir registry/lib/components/live/danmaku-visibility-check install --frozen-lockfile
           pnpm run build-features
-      - name: Git commit
-        id: commit
-        run: |
-          git add --all
-          git commit -m "CI build"
-        continue-on-error: true
-      - name: Git push
-        uses: ad-m/github-push-action@master
-        if: ${{ steps.commit.outcome == 'success' }}
-        with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-          branch: ${{ github.ref }}
-      - name: Log
-        if: ${{ steps.commit.outcome != 'success' }}
-        run: echo Nothing to commit.
