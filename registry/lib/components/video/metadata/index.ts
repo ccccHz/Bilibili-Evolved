@@ -2,10 +2,11 @@ import { defineComponentMetadata } from '@/components/define'
 import { PackageEntry } from '@/core/download'
 import { hasVideo } from '@/core/spin-query'
 import { Toast } from '@/core/toast'
-import { videoUrls } from '@/core/utils/urls'
+import { videoAndBangumiUrls } from '@/core/utils/urls'
 import { DownloadVideoAssets } from '../download/types'
-import { generateByType, MetadataType } from './metadata'
+import { generateByType } from './metadata'
 import { options } from './options'
+import { MetadataType } from './types'
 
 export const title = '保存视频元数据'
 export const name = 'saveVideoMetadata'
@@ -24,14 +25,18 @@ const author = [
 export const component = defineComponentMetadata({
   name,
   displayName: title,
-  description: '保存视频元数据（标题、描述、UP、章节等）',
   author,
   tags: [componentsTags.video],
   entry: none,
-  urlInclude: videoUrls,
+  urlInclude: videoAndBangumiUrls,
   options,
   widget: {
-    condition: hasVideo,
+    condition: async () => {
+      return (
+        (await hasVideo()) &&
+        Boolean((await import('@/core/settings')).getComponentSettings(name).options.showWidget)
+      )
+    },
     component: () => import('./SaveMetadata.vue').then(m => m.default),
   },
   plugin: {

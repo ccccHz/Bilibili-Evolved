@@ -4,14 +4,19 @@ import { playerUrls } from '@/core/utils/urls'
 import { KeyBindingAction } from '../../../utils/keymap/bindings'
 import { Screenshot, takeScreenshot } from './screenshot'
 import { defineComponentMetadata } from '@/components/define'
-import desc from './desc.md'
 import ScreenshotContainer from './VideoScreenshotContainer.vue'
 
 export const VideoScreenshotDisabledClass = 'video-screenshot-disable'
-const entry = async () => {
-  let screenShotsList: Vue & {
-    screenshots: Screenshot[]
+let screenShotsList: Vue & {
+  screenshots: Screenshot[]
+}
+const exitConfirmHandler = (e: BeforeUnloadEvent) => {
+  if (screenShotsList?.screenshots.length > 0) {
+    e.preventDefault()
   }
+}
+
+const entry = async () => {
   addControlBarButton({
     name: 'takeScreenshot',
     displayName: '截图',
@@ -35,18 +40,22 @@ const entry = async () => {
       }
     },
   })
+  window.addEventListener('beforeunload', exitConfirmHandler)
 }
 export const component = defineComponentMetadata({
   name: 'videoScreenshot',
   displayName: '启用视频截图',
   tags: [componentsTags.video],
   entry,
-  description: {
-    'zh-CN': desc,
-  },
   urlInclude: playerUrls,
-  reload: () => document.body.classList.remove(VideoScreenshotDisabledClass),
-  unload: () => document.body.classList.add(VideoScreenshotDisabledClass),
+  reload: () => {
+    document.body.classList.remove(VideoScreenshotDisabledClass)
+    window.addEventListener('beforeunload', exitConfirmHandler)
+  },
+  unload: () => {
+    document.body.classList.add(VideoScreenshotDisabledClass)
+    window.removeEventListener('beforeunload', exitConfirmHandler)
+  },
   plugin: {
     displayName: '视频截图 - 快捷键支持',
     setup: ({ addData }) => {

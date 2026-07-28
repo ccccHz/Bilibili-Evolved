@@ -52,9 +52,11 @@ function sideEffect() {
     (ev: ReturnType<typeof createPlayerModeChangeEvent>) => {
       const { mode } = ev.detail
 
-      currentMode = mode
+      if (mode !== 'mini') {
+        currentMode = mode
+      }
 
-      if (mode === 'wide') {
+      if (currentMode === 'wide') {
         danmuku.style.marginTop = '0px'
         author.style.marginTop = calcMarginTop()
       } else {
@@ -119,8 +121,6 @@ export const component = defineComponentMetadata({
   },
   urlInclude: videoUrls,
   displayName: '播放器置顶（新）',
-  description:
-    '原来的播放器置顶插件，现在已经不可用了，这是一个新的版本，可以在视频页面中将播放器放在页面最上方.',
   entry: playerOnTop,
   reload: () =>
     playerOnTop({ settings: getComponentSettings('playerOnTopNew'), metadata: component }),

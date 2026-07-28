@@ -22,6 +22,11 @@ const options = defineOptionsMetadata({
     displayName: '音量调整幅度',
     validator: getNumberValidator(1, 100),
   },
+  /** 是否显示跳转快捷键 */
+  showSeekShortcuts: {
+    defaultValue: true,
+    displayName: '显示跳转快捷键',
+  },
   customKeyBindings: {
     defaultValue: {} as Record<string, string>,
     displayName: '自定义键位',
@@ -79,9 +84,6 @@ export const component = defineComponentMetadata({
   },
   reload: () => {
     config && (config.enable = true)
-  },
-  description: {
-    'zh-CN': '为脚本的功能和 b 站的功能启用键盘快捷键支持, 快捷键列表可在`快捷键设置`中查看和配置.',
   },
   extraOptions: () => import('./settings/ExtraOptions.vue').then(m => m.default),
   options,

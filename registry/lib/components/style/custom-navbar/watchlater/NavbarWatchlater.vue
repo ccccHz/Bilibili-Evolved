@@ -40,7 +40,7 @@
           <div v-if="card.percent" class="progress" :style="{ width: card.percent * 100 + '%' }" />
         </a>
         <a class="title" target="_blank" :href="card.href" :title="card.title">{{ card.title }}</a>
-        <div class="info">
+        <div class="info-row">
           <a
             class="up"
             target="_blank"
@@ -129,9 +129,9 @@ export default Vue.extend({
       }
       const getLink = (item: RawWatchlaterItem) => {
         if (this.redirect) {
-          return `https://www.bilibili.com/video/${item.bvid}`
+          return `https://www.bilibili.com/video/${item.bvid}/`
         }
-        return `https://www.bilibili.com/medialist/play/watchlater/${item.bvid}`
+        return `https://www.bilibili.com/list/watchlater?bvid=${item.bvid}`
       }
       const cards = rawList.map(item => {
         const currentPage = item.pages?.find(p => p.cid === item.cid)
@@ -288,8 +288,8 @@ export default Vue.extend({
         'cover info' 1fr / 130px 1fr;
       height: 85px;
       body.dark & {
-        background-color: #282828;
-        color: #eee;
+        background-color: var(--be-color-card-bg, #282828);
+        color: var(--be-color-text-title, #eee);
       }
       &:not(:last-child) {
         margin-bottom: 12px;
@@ -352,7 +352,7 @@ export default Vue.extend({
           color: var(--theme-color) !important;
         }
       }
-      .info {
+      .info-row {
         display: flex;
         justify-content: space-between;
         align-items: flex-end;

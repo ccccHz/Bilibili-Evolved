@@ -35,6 +35,9 @@ const entry = async () => {
         if (target.hasAttribute('data-pics')) {
           return
         }
+        if (target.parentElement?.classList.contains('dyn-card-opus__summary__action')) {
+          return
+        }
         if (
           [
             'bili-rich-text__action',
@@ -42,6 +45,7 @@ const entry = async () => {
             'bili-rich-text-module',
             'bili-rich-text-link',
             'bili-rich-text-viewpic',
+            'opus-text-rich-hl',
           ].some(className => target.classList.contains(className))
         ) {
           return
@@ -98,9 +102,6 @@ export const component = defineComponentMetadata({
   displayName: '禁止跳转动态详情',
   tags: [componentsTags.feeds],
   urlInclude: feedsUrls,
-  description: {
-    'zh-CN': '禁止动态点击后跳转详情页, 方便选择其中的文字.',
-  },
   entry,
   unload: () => {
     document.getElementById(id)?.remove()

@@ -16,7 +16,7 @@
           {{ t.displayName }}
         </div>
       </div>
-      <!-- <div class="component-detail-separator"></div> -->
+      <div class="component-detail-separator"></div>
       <template
         v-if="(componentData.options && generatedOptions.length > 0) || componentData.extraOptions"
       >
@@ -35,7 +35,7 @@
           </div>
           <slot></slot>
         </div>
-        <!-- <div class="component-detail-separator"></div> -->
+        <div class="component-detail-separator"></div>
       </template>
       <template v-if="!(componentData.options && !componentData.description)">
         <ComponentDescription
@@ -46,8 +46,20 @@
       </template>
       <div class="component-detail-grow"></div>
       <div class="component-detail-internal-data">
+        <div class="component-detail-separator"></div>
         <div v-if="componentData.commitHash" class="component-detail-internal-data-row">
-          <div class="internal-name">Commit: {{ componentData.commitHash.substring(0, 9) }}</div>
+          <div class="component-detail-commit">
+            <span class="internal-name"
+              >Commit: {{ componentData.commitHash.substring(0, 9) }}</span
+            >
+            <VIcon
+              v-if="isLocalDebugUrl"
+              class="local-debug-warning"
+              icon="mdi-alert-circle-outline"
+              :size="14"
+              title="当前组件的更新地址是本地开发链接, 不会随着检查更新而更新"
+            />
+          </div>
         </div>
         <div class="component-detail-internal-data-row">
           <div class="internal-name">内部名称: {{ componentData.name }}</div>
@@ -82,7 +94,6 @@
           </MiniToast>
         </div>
       </div>
-      <!-- <div class="component-detail-separator"></div> -->
     </template>
   </div>
 </template>
@@ -90,6 +101,8 @@
 <script lang="ts">
 import { VButton, VIcon, SwitchBox, MiniToast } from '@/ui'
 import { visible } from '@/core/observer'
+import { getComponentSettings } from '@/core/settings'
+import type { AutoUpdateOptions } from '../auto-update'
 import { OptionsMetadata } from '../component'
 import ComponentDescription from './ComponentDescription.vue'
 import ComponentOption from './ComponentOption.vue'
@@ -130,6 +143,11 @@ export default Vue.extend({
         ([, option]) => !option.hidden,
       )
     },
+    isLocalDebugUrl() {
+      const { options } = getComponentSettings<AutoUpdateOptions>('autoUpdate')
+      const url = options.urls.components[this.componentData.name]?.url ?? ''
+      return /^http:\/\/localhost:\d+\/registry\/dist\/components\/.+\.js$/.test(url)
+    },
   },
   async mounted() {
     const element = this.$el as HTMLElement
@@ -155,6 +173,7 @@ export default Vue.extend({
   background-color: inherit;
   border-radius: 7px;
   overflow: auto;
+  overscroll-behavior: contain;
   @include v-stretch();
 
   .extra-option {
@@ -162,10 +181,11 @@ export default Vue.extend({
   }
   &-separator {
     height: 1px;
-    background-color: #8882;
-    margin-bottom: 12px;
+    border-bottom: 1px solid #8882;
+    margin: 8px 0;
     flex-shrink: 0;
     align-self: stretch;
+    box-sizing: border-box;
   }
   &-header {
     @include h-center();
@@ -188,10 +208,7 @@ export default Vue.extend({
     }
   }
   &-description:not(:last-child) {
-    padding: 12px 12px 0;
-    // max-height: 9em;
-    // line-height: 1.5;
-    // @include no-scrollbar();
+    padding: 6px 12px;
   }
   &-tags {
     @include h-center();
@@ -223,16 +240,28 @@ export default Vue.extend({
     min-height: 24px;
     box-sizing: content-box;
     background-color: inherit;
-    padding: 8px 12px;
+    padding-bottom: 8px;
+
+    .component-detail-separator {
+      margin-top: 0;
+    }
 
     &-row {
       @include h-center();
       justify-content: space-between;
       line-height: 24px;
+      padding: 0 12px;
     }
 
     .internal-name {
       opacity: 0.5;
+    }
+    .component-detail-commit {
+      @include h-center();
+    }
+    .local-debug-warning {
+      color: #ff9800;
+      margin-left: 4px;
     }
     .tippy-content {
       padding: 4px;

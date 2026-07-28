@@ -1,13 +1,23 @@
 import { OptionsOfMetadata, defineOptionsMetadata } from '@/components/define'
 
+export interface FeedsFilterPatternConfig {
+  key: string
+  pattern: string
+  enabled: boolean
+}
+
 export const options = defineOptionsMetadata({
+  showInFeedsHome: {
+    defaultValue: true,
+    displayName: '在动态首页显示选项卡片',
+  },
   types: {
     defaultValue: [] as number[],
     displayName: '过滤动态类型',
     hidden: true,
   },
   patterns: {
-    defaultValue: [] as string[],
+    defaultValue: [] as FeedsFilterPatternConfig[],
     displayName: '过滤关键词',
     hidden: true,
   },

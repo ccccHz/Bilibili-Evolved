@@ -26,20 +26,6 @@ body.disable-highlight-danmaku-style {
     }
   }
 }
-body.disable-up-danmaku-style {
-  .bili-danmaku-x-up,
-  .bili-dm.bili-up,
-  .b-danmaku-up {
-    padding: 0 !important;
-    line-height: 1.125 !important;
-    background-color: transparent !important;
-    border-radius: 0 !important;
-    .bili-up-tip,
-    .b-danmaku-up-tip {
-      display: none !important;
-    }
-  }
-}
 body.disable-vip-danmaku-style {
   .bili-danmaku-x-dm-vip,
   .bili-dm-vip {
@@ -48,6 +34,27 @@ body.disable-vip-danmaku-style {
   }
   :where(.bili-dm, .bili-danmaku-x-dm):not([style*='--textShadow']) {
     --textShadow: var(--danmaku-text-shadow);
+  }
+  .bili-danmaku-x-colorful {
+    background-clip: unset !important;
+    background-image: none !important;
+    --textShadow: var(--danmaku-text-shadow);
+    text-shadow: var(--textShadow) !important;
+  }
+}
+body.disable-up-danmaku-style {
+  .bili-danmaku-x-up,
+  .bili-dm.bili-up,
+  .b-danmaku-up {
+    padding: 0 !important;
+    line-height: 1.125 !important;
+    background-color: transparent !important;
+    border-radius: 0 !important;
+    .bili-danmaku-x-up-tip,
+    .bili-up-tip,
+    .b-danmaku-up-tip {
+      display: none !important;
+    }
   }
 }
 body.disable-upSlogan-danmaku-style {

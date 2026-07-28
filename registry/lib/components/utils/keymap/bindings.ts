@@ -1,4 +1,4 @@
-import { isTyping, matchUrlPattern } from '@/core/utils'
+import { getActiveElement, isTyping, matchUrlPattern } from '@/core/utils'
 import { mediaListUrls, watchlaterUrls } from '@/core/utils/urls'
 import { clickElement, changeVideoTime, showTip } from './actions'
 import { shadowDomObserver } from '@/core/shadow-root'
@@ -16,7 +16,10 @@ export interface KeyBindingAction {
   displayName: string
   run: (context: KeyBindingActionContext) => unknown
   prevent?: boolean
+  /** 默认打字时忽略快捷键, 将此属性设置为 false 可以在打字时允许触发快捷键 */
   ignoreTyping?: boolean
+  /** 默认聚焦在可聚焦元素时不忽略快捷键, 将此属性设置为 true 可以在聚焦时禁止触发快捷键 */
+  ignoreFocus?: boolean
 }
 export interface KeyBinding {
   keys: string[]
@@ -39,10 +42,46 @@ export const loadKeyBindings = lodash.once((bindings: KeyBinding[]) => {
         return
       }
 
+      const isTypingNow = isTyping()
+
       // 打字时无视快捷键
-      if (binding.action.ignoreTyping !== false && isTyping()) {
+      if (binding.action.ignoreTyping !== false && isTypingNow) {
         return
       }
+
+      // 忽略其他可聚焦元素
+      const hasElementFocus = (() => {
+        if (isTypingNow) {
+          return true
+        }
+        const activeElement = getActiveElement()
+        if (([document.body, null] as (Element | null)[]).includes(activeElement)) {
+          return false
+        }
+        if (activeElement instanceof HTMLMediaElement) {
+          return false
+        }
+        // 播放器内各种控制按钮的焦点
+        if (
+          activeElement instanceof HTMLDivElement &&
+          activeElement.classList.contains('bpx-player-ctrl-btn')
+        ) {
+          return false
+        }
+        // 播放器内各种设置项按钮的焦点
+        if (activeElement instanceof HTMLInputElement && activeElement.classList.contains('bui')) {
+          return false
+        }
+        return true
+      })()
+      if (
+        binding.action.ignoreFocus === false &&
+        binding.action.ignoreTyping !== false &&
+        hasElementFocus
+      ) {
+        return
+      }
+
       const key = e.key.toLowerCase()
 
       // 全景视频禁用 WASD 快捷键

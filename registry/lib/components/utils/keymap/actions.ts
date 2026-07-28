@@ -88,6 +88,7 @@ export const builtInActions: Record<string, KeyBindingAction> = {
   },
   volumeUp: {
     displayName: '增加音量',
+    ignoreFocus: false,
     run: () => {
       const step = getComponentSettings<Options>('keymap').options.volumeStep
       const volume = playerAgent.changeVolume(step)
@@ -100,6 +101,7 @@ export const builtInActions: Record<string, KeyBindingAction> = {
   },
   volumeDown: {
     displayName: '降低音量',
+    ignoreFocus: false,
     run: () => {
       const step = getComponentSettings<Options>('keymap').options.volumeStep
       const volume = playerAgent.changeVolume(-step)
@@ -232,10 +234,6 @@ export const builtInActions: Record<string, KeyBindingAction> = {
       return true
     },
   },
-  seekBegin: {
-    displayName: '回开头',
-    run: () => playerAgent.seek(0),
-  },
   sendComment: {
     displayName: '发送评论',
     ignoreTyping: false,
@@ -272,5 +270,22 @@ export const builtInActions: Record<string, KeyBindingAction> = {
       return true
     },
   },
+  seekBegin: {
+    displayName: '回开头',
+    run: () => playerAgent.seek(0),
+  },
+  /** 10% - 90% 的跳转动作 */
+  ...lodash.fromPairs(
+    lodash.range(1, 10).map(i => [
+      `seekProgress${i}0`,
+      {
+        displayName: `跳转到 ${i}0%`,
+        run: () => {
+          const duration = (playerAgent.query.video.element.sync() as HTMLVideoElement)?.duration
+          return duration ? (playerAgent.seek(duration * i * 0.1), true) : null
+        },
+      } as KeyBindingAction,
+    ]),
+  ),
 }
 export const [actions] = registerAndGetData('keymap.actions', builtInActions)

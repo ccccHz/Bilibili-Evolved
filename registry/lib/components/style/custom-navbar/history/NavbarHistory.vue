@@ -6,6 +6,11 @@
           <TextBox v-model="search" placeholder="搜索" linear></TextBox>
         </div>
         <div class="operations">
+          <div class="operation">
+            <VButton title="刷新" round @click="reloadHistoryItems()">
+              <VIcon icon="mdi-refresh" :size="16"></VIcon>
+            </VButton>
+          </div>
           <div class="operation" @click="toggleHistoryPause">
             <VButton v-if="!paused" title="暂停记录历史" round>
               <VIcon icon="mdi-pause" :size="14"></VIcon>
@@ -14,7 +19,7 @@
               <VIcon icon="mdi-play" :size="14"></VIcon>
             </VButton>
           </div>
-          <a class="operation" target="_blank" href="https://www.bilibili.com/account/history">
+          <a class="operation" target="_blank" href="https://www.bilibili.com/history">
             <VButton title="查看更多" round>
               <VIcon icon="mdi-dots-horizontal" :size="18"></VIcon>
             </VButton>
@@ -356,7 +361,7 @@ export default Vue.extend({
           z-index: 1;
           background-color: #fff;
           body.dark & {
-            background-color: #222;
+            background-color: var(--be-color-popup-bg, #222);
           }
         }
         &-items {
@@ -387,8 +392,8 @@ export default Vue.extend({
             border: 1px solid #8882;
             box-sizing: border-box;
             body.dark & {
-              background-color: #282828;
-              color: #eee;
+              background-color: var(--be-color-card-bg, #282828);
+              color: var(--be-color-text-title, #eee);
             }
             &:not(:last-child) {
               margin-bottom: 8px;

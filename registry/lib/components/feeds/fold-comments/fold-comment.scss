@@ -13,19 +13,22 @@
     color: #99a2aa;
     cursor: pointer;
     transition: all 0.2s ease-out;
-    z-index: 110;
+    z-index: 98;
     border-radius: 4px;
     &:hover {
       color: black;
     }
     body.dark & {
-      background-color: #444;
-      color: #eee;
+      color: var(--be-color-text-title, #eee);
+      background-color: var(--be-color-panel-bg, #444);
       &:hover {
         color: var(--theme-color);
       }
     }
   }
+}
+.space-dynamic__content {
+  overflow: visible !important;
 }
 .bili-comment-container {
   display: flex !important;

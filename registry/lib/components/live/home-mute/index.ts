@@ -7,9 +7,6 @@ export const component = defineComponentMetadata({
   name: 'liveHomeMute',
   displayName: '直播首页静音',
   tags: [componentsTags.live],
-  description: {
-    'zh-CN': '禁止直播首页的推荐直播间自动开始播放.',
-  },
   entry: async ({ metadata }) => {
     const styleID = 'hide-home-live'
     addComponentListener(
@@ -37,6 +34,10 @@ export const component = defineComponentMetadata({
       'zh-CN': '提前执行代码以尽快静音.',
     },
     async setup() {
+      const { isComponentEnabled } = await import('@/core/settings')
+      if (!isComponentEnabled('liveHomeMute')) {
+        return
+      }
       const { matchUrlPattern } = await import('@/core/utils')
       if (!matchUrlPattern(liveHome)) {
         return

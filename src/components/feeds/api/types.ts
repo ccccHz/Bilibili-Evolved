@@ -15,6 +15,10 @@ export interface RepostFeedsCardType extends FeedsCardType {
   name: '转发'
 }
 export const feedsCardTypes = {
+  unknown: {
+    id: 0,
+    name: '未知',
+  },
   repost: {
     id: 1,
     name: '转发',
@@ -78,9 +82,25 @@ export const feedsCardTypes = {
     id: 4300,
     name: '收藏夹',
   },
+  courses: {
+    id: 2044,
+    name: '课程',
+  },
+  live: {
+    id: 2045,
+    name: '直播',
+  },
+  ugcSeason: {
+    id: 2046,
+    name: '合集',
+  },
   liveRecord: {
-    id: 2047, // FIXME: 暂时随便写个 id 了, 这个东西目前找不到 type
+    id: 2047,
     name: '开播记录',
+  },
+  commonSquare: {
+    id: 2050,
+    name: '通用卡片',
   },
 } satisfies Record<string, FeedsCardType>
 /** 是否是转发类型的卡片, 额外能够读取被转发动态的信息 */
