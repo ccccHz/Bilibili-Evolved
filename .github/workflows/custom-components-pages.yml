@@ -1,0 +1,63 @@
+name: Publish custom components to Pages
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - master
+    paths:
+      - .github/workflows/custom-components-pages.yml
+      - custom-registry/**
+      - registry/lib/components/live/autoResolution/**
+      - registry/lib/components/live/danmaku-visibility-check/**
+      - registry/lib/components/live/liveData-reAdd/**
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - name: Install core dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Install registry dependencies
+        run: pnpm --dir registry install --frozen-lockfile
+      - name: Install component-local dependencies
+        run: pnpm --dir registry/lib/components/live/danmaku-visibility-check install --frozen-lockfile
+      - name: Check publisher types
+        run: pnpm exec tsc -p custom-registry/tsconfig.json --noEmit
+      - name: Build custom component site
+        run: pnpm tsx custom-registry/build.ts
+      - name: Configure Pages
+        uses: actions/configure-pages@v5
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v4
+        with:
+          path: custom-registry/dist
+
+  deploy:
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+      - name: Deploy Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
