@@ -62,6 +62,7 @@ export interface LaplaceLiveClientConstructor {
       address: string
       uid: number
       buvid?: string
+      createWebSocket?: (address: string) => WebSocket
     },
   ): LaplaceLiveClient
 }

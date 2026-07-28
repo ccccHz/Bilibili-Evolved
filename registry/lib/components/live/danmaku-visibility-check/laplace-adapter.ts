@@ -8,6 +8,7 @@ import {
 } from './types'
 import { LiveWS as RuntimeLiveWS } from './laplace-runtime'
 import { parseDanmakuMessage } from './danmaku-message'
+import { parseDanmakuAuthReply } from './auth-reply'
 
 const LiveWS = RuntimeLiveWS as LaplaceLiveClientConstructor
 const connectionTimeout = 10000
@@ -16,6 +17,12 @@ export class LaplaceDanmakuObserver extends EventTarget {
   status: ObserverStatus = 'idle'
   private client: LaplaceLiveClient | null = null
   private connectTask: Promise<void> | null = null
+
+  constructor(
+    private createWebSocket: (address: string) => WebSocket = address => new WebSocket(address),
+  ) {
+    super()
+  }
 
   async connect(config: DanmakuObserverConfig) {
     if (this.status === 'ready') {
@@ -39,29 +46,21 @@ export class LaplaceDanmakuObserver extends EventTarget {
     if (this.status === 'closed' || this.status === 'idle') {
       return
     }
-    this.status = 'closing'
-    this.dispatchStatus()
+    this.setStatus('closing')
     const { client } = this
     this.client = null
     client?.close()
-    this.status = 'closed'
-    this.dispatchStatus()
+    this.setStatus('closed')
   }
 
   private open(config: DanmakuObserverConfig) {
     return new Promise<void>((resolve, reject) => {
-      const client = new LiveWS(config.roomId, {
-        protover: 3,
-        key: config.key,
-        address: config.address,
-        uid: 0,
-        buvid: config.buvid,
-      })
-      this.client = client
       let entered = false
       let settled = false
       let timeout = 0
       let finish: (error?: Error) => void
+      let socket: WebSocket | null = null
+      let client: LaplaceLiveClient
 
       const onLive = () => {
         entered = true
@@ -92,6 +91,36 @@ export class LaplaceDanmakuObserver extends EventTarget {
           this.dispatchStatus()
         }
       }
+      const onSocketMessage = (event: MessageEvent) => {
+        if (!(event.data instanceof ArrayBuffer)) {
+          return
+        }
+        const reply = parseDanmakuAuthReply(event.data)
+        if (!reply) {
+          return
+        }
+        if (reply.code === 0) {
+          return
+        }
+        const detail = reply.message ? `：${reply.message}` : ''
+        const code = reply.code === null ? '无法解析' : String(reply.code)
+        finish(new Error(`Laplace 观察连接鉴权失败（code ${code}）${detail}`))
+      }
+
+      client = new LiveWS(config.roomId, {
+        protover: 3,
+        key: config.key,
+        address: config.address,
+        uid: 0,
+        buvid: config.buvid,
+        createWebSocket: address => {
+          socket = this.createWebSocket(address)
+          socket.binaryType = 'arraybuffer'
+          socket.addEventListener('message', onSocketMessage)
+          return socket
+        },
+      })
+      this.client = client
 
       finish = (error?: Error) => {
         if (settled) {
@@ -101,12 +130,16 @@ export class LaplaceDanmakuObserver extends EventTarget {
         clearTimeout(timeout)
         client.removeEventListener('live', onLive)
         client.removeEventListener('heartbeat', onHeartbeat)
+        socket?.removeEventListener('message', onSocketMessage)
         if (error) {
+          const intentionallyClosed = this.status === 'closing' || this.status === 'closed'
           client.removeEventListener('error', onError)
           client.removeEventListener('close', onClose)
-          this.status = 'error'
+          this.status = intentionallyClosed ? 'closed' : 'error'
           this.dispatchStatus()
-          client.close()
+          if (!intentionallyClosed) {
+            client.close()
+          }
           this.client = null
           reject(error)
           return
@@ -146,5 +179,13 @@ export class LaplaceDanmakuObserver extends EventTarget {
 
   private dispatchStatus() {
     this.dispatchEvent(new CustomEvent('status', { detail: this.status }))
+  }
+
+  private setStatus(status: ObserverStatus) {
+    if (this.status === status) {
+      return
+    }
+    this.status = status
+    this.dispatchStatus()
   }
 }
