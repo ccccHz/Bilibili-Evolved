@@ -13,7 +13,7 @@ on:
       - registry/lib/components/live/liveData-reAdd/**
 
 permissions:
-  contents: read
+  contents: write
   pages: write
   id-token: write
 
@@ -44,6 +44,15 @@ jobs:
         run: pnpm exec tsc -p custom-registry/tsconfig.json --noEmit
       - name: Build custom component site
         run: pnpm tsx custom-registry/build.ts
+      - name: Publish GitHub Raw artifacts
+        uses: peaceiris/actions-gh-pages@v4
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_branch: custom-dist
+          publish_dir: custom-registry/dist
+          force_orphan: true
+          enable_jekyll: false
+          commit_message: Publish custom components from ${{ github.sha }}
       - name: Configure Pages
         uses: actions/configure-pages@v5
       - name: Upload Pages artifact

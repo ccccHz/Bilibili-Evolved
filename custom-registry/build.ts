@@ -11,6 +11,7 @@ interface PublishedArtifact {
   displayName: string
   description: string
   path: string
+  installUrl: string
   bytes: number
   sha256: string
 }
@@ -21,6 +22,11 @@ const outputRoot = path.resolve(
   process.env.CUSTOM_REGISTRY_OUTPUT_DIR ?? 'custom-registry/dist',
 )
 const componentsOutput = path.join(outputRoot, 'components')
+const repository = process.env.GITHUB_REPOSITORY ?? 'ccccHz/Bilibili-Evolved'
+const installBaseUrl = (
+  process.env.CUSTOM_COMPONENT_BASE_URL ??
+  `https://raw.githubusercontent.com/${repository}/custom-dist`
+).replace(/\/$/, '')
 
 const getRevision = () => {
   const githubSha = process.env.GITHUB_SHA
@@ -104,13 +110,16 @@ const renderIndex = (revision: string, artifacts: PublishedArtifact[]) => {
           <p>${escapeHtml(item.description)}</p>
           <p class="meta">${size} KiB · SHA-256 ${shortChecksum}…</p>
           <div class="actions">
-            <button data-copy="${escapeHtml(item.path)}">复制安装链接</button>
-            <a href="${escapeHtml(item.path)}">查看构建文件</a>
+            <button data-copy="${escapeHtml(item.installUrl)}">复制安装链接</button>
+            <a href="${escapeHtml(item.installUrl)}">查看构建文件</a>
           </div>
         </article>`
     })
     .join('')
-  const paths = JSON.stringify(artifacts.map(item => item.path)).replaceAll('<', '\\u003c')
+  const installUrls = JSON.stringify(artifacts.map(item => item.installUrl)).replaceAll(
+    '<',
+    '\\u003c',
+  )
   return `<!doctype html>
 <html lang="zh-CN">
   <head>
@@ -157,7 +166,7 @@ const renderIndex = (revision: string, artifacts: PublishedArtifact[]) => {
     <main>
       <header>
         <h1>Bilibili Evolved 自定义组件</h1>
-        <p class="lead">在 Bilibili Evolved 的组件管理页面粘贴安装链接. 从这里安装后, 自动更新会继续使用同一个 Pages 地址.</p>
+        <p class="lead">在 Bilibili Evolved 的组件管理页面粘贴安装链接. 组件文件由独立的 custom-dist 分支通过 GitHub Raw 提供, 自动更新沿用同一个地址.</p>
         <div class="toolbar">
           <button id="copy-all">复制全部安装链接</button>
           <a href="manifest.json">查看 manifest.json</a>
@@ -168,19 +177,18 @@ const renderIndex = (revision: string, artifacts: PublishedArtifact[]) => {
       <section class="grid">${cards}</section>
     </main>
     <script>
-      const paths = ${paths}
+      const installUrls = ${installUrls}
       const status = document.querySelector('#status')
-      const absoluteUrl = path => new URL(path, window.location.href).href
       const copy = async text => {
         await navigator.clipboard.writeText(text)
         status.textContent = '已复制到剪贴板'
         window.setTimeout(() => { status.textContent = '' }, 1800)
       }
       document.querySelectorAll('[data-copy]').forEach(button => {
-        button.addEventListener('click', () => copy(absoluteUrl(button.dataset.copy)))
+        button.addEventListener('click', () => copy(button.dataset.copy))
       })
       document.querySelector('#copy-all').addEventListener('click', () => {
-        copy(paths.map(absoluteUrl).join('\\n'))
+        copy(installUrls.join('\\n'))
       })
     </script>
   </body>
@@ -209,6 +217,7 @@ const main = async () => {
       return {
         ...item,
         path: relativePath,
+        installUrl: `${installBaseUrl}/${relativePath}`,
         bytes: Buffer.byteLength(code),
         sha256: createHash('sha256').update(code).digest('hex'),
       }
