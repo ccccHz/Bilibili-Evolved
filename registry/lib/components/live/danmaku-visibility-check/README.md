@@ -17,8 +17,9 @@
 - 能在登录状态的直播间建立独立观察连接并输出
   `liveDanmakuVisibilityCheck Laplace observer ready`.
 - 已兼容纯净直播网址 `/blanc/<roomId>` 的房间号解析.
-- 当前直播页把发送栏放在 `/blanc/<roomId>` iframe 中. 组件只在该 iframe
-  运行, 因此既能捕获真实发送动作, 又不会在顶层页面重复建立连接.
+- 同时兼容两种直播页结构: 发送栏位于顶层页面, 或位于
+  `/blanc/<roomId>` iframe. 每个页面上下文先等待完整的聊天记录、输入框和发送按钮;
+  只有实际承载发送功能的上下文才会建立观察连接.
 - 能从 Laplace 通用 `msg` 事件识别 `DANMU_MSG` 及带后缀的
   `DANMU_MSG:*` 命令.
 - 已实测收到的消息能解析正文、时间戳和消息 ID.
@@ -27,7 +28,7 @@
 - 独立匿名连接的 `extra.send_from_me` 为 `false`, 因此它也不能直接识别当前用户.
 - 当前发送栏选择器已在真实页面确认, 控制台会输出 `send capture ready`.
 - 早期版本把 `mousedown` 直接绑定到发送按钮, 会漏掉 Evo 自定义发送栏的
-  `sendButton.click()` 和按钮节点被页面重绘替换的情况. 当前改为 iframe
+  `sendButton.click()` 和按钮节点被页面重绘替换的情况. 当前改为当前页面上下文
   `document` 捕获阶段的事件委托, 覆盖原生按钮点击、程序化点击、原生输入框 Enter
   和 Evo 自定义发送栏 Enter.
 
@@ -62,6 +63,20 @@
 - 首次拉取源码或更新锁文件后, 在本目录执行 `pnpm install --frozen-lockfile`,
   然后再从仓库根目录启动 Dev Server 或构建组件.
 - 已构建的模块文件不要求使用者安装这项依赖.
+
+本地 Laplace 对照命令:
+
+```bash
+cd registry/lib/components/live/danmaku-visibility-check
+pnpm laplace-cli -- 7777
+pnpm laplace-cli -- 7777 20
+```
+
+第一个参数是直播间号, 第二个可选参数表示收到多少条弹幕后自动退出. 状态信息写入
+stderr, `DANMU_MSG` 以每行一条 JSON 写入 stdout. 该命令不读取登录 Cookie,
+会自动从 Bilibili SPI 接口取得匿名 buvid, 并接收 `DANMU_MSG` 及所有带后缀的
+`DANMU_MSG:*` 命令. 可用 `BILIBILI_BUVID` 环境变量覆盖匿名 buvid. 该命令用于
+独立确认房间配置接口和 Laplace WebSocket 接收链路是否正常.
 
 已知限制:
 

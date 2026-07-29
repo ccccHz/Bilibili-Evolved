@@ -2,15 +2,22 @@ import { DanmakuDiagnosticSnapshot, ObservedDanmaku } from './types'
 
 const summaryInterval = 30000
 const sampleLimit = 3
-const fallbackSendMatchTimeout = 1500
+// Real-room measurement (10 normal messages, 2026-07-29): P95 1891ms.
+// Keep 300ms headroom for tail jitter while no room-specific samples exist.
+const fallbackSendMatchTimeout = 2200
 const latencyCalibrationMinimumSamples = 10
 const maximumValidAbsoluteLatencyP95 = 1000
 const latencySampleLimit = 120
-const sendLatencySafetyMargin = 100
+const sendLatencySafetyMargin = 300
 const maximumDynamicSendLatencyP95 = fallbackSendMatchTimeout - sendLatencySafetyMargin
 const sendLatencySampleLimit = 30
 const arrivalCacheLimit = 200
 const diagnosticLoggingEnabled = false
+// Temporary measurement mode: keep production diagnostics quiet, but emit only
+// the samples needed to tune the public-visibility timeout in a real room.
+const sendLatencyTestLoggingEnabled = false
+const sendLatencyTestTimeout = 10000
+const sendLatencyTestMinimumSamples = 10
 
 const logDiagnostic = (...args: unknown[]) => {
   if (diagnosticLoggingEnabled) {
@@ -148,7 +155,13 @@ export class DanmakuDiagnostics {
     this.lastCapturedAt = capturedAt
     const id = this.nextPendingId
     this.nextPendingId += 1
-    const matchTimeout = this.getSendMatchTimeout()
+    // A 1500ms fallback cannot measure a normally visible message that takes
+    // longer than 1500ms: it times out before becoming a successful sample.
+    // During this bounded test, use a fixed long window and derive the
+    // production value from the resulting untruncated distribution.
+    const matchTimeout = sendLatencyTestLoggingEnabled
+      ? sendLatencyTestTimeout
+      : this.getSendMatchTimeout()
     const timeout = window.setTimeout(() => {
       const pending = this.takePending(id)
       if (!pending) {
@@ -156,6 +169,12 @@ export class DanmakuDiagnostics {
       }
       this.snapshot.timedOutSends += 1
       const waitedMs = Date.now() - pending.capturedAt
+      this.logSendLatencyTestResult({
+        id: pending.id,
+        content: pending.content,
+        status: 'not-observed',
+        waitedMs,
+      })
       if (diagnosticLoggingEnabled) {
         warnDiagnostic(
           this.componentName,
@@ -230,6 +249,12 @@ export class DanmakuDiagnostics {
         this.sendEndToEndSamples.splice(0, this.sendEndToEndSamples.length - sendLatencySampleLimit)
       }
       this.snapshot.matchedSends += 1
+      this.logSendLatencyTestResult({
+        id: matchingSend.id,
+        content: matchingSend.content,
+        status: 'observed',
+        latencyMs: sendEndToEndMs,
+      })
       if (diagnosticLoggingEnabled) {
         logDiagnostic(
           this.componentName,
@@ -345,6 +370,37 @@ export class DanmakuDiagnostics {
       return fallbackSendMatchTimeout
     }
     return Math.max(100, Math.ceil((sendLatencySafetyMargin + p95) / 100) * 100)
+  }
+
+  private logSendLatencyTestResult(
+    result:
+      | { id: number; content: string; status: 'observed'; latencyMs: number }
+      | { id: number; content: string; status: 'not-observed'; waitedMs: number },
+  ) {
+    if (!sendLatencyTestLoggingEnabled) {
+      return
+    }
+    const samples = this.sendEndToEndSamples
+    const p50 = percentile(samples, 0.5)
+    const p95 = percentile(samples, 0.95)
+    const maximum = samples.length === 0 ? null : Math.max(...samples)
+    const provisionalWindowMs =
+      maximum === null ? null : Math.ceil((maximum + 300) / 100) * 100
+    console.info(
+      this.componentName,
+      'send-latency-test',
+      JSON.stringify({
+        ...result,
+        testTimeoutMs: sendLatencyTestTimeout,
+        observedSamples: samples.length,
+        timedOutSamples: this.snapshot.timedOutSends,
+        sendEndToEndP50Ms: p50,
+        sendEndToEndP95Ms: p95,
+        sendEndToEndMaxMs: maximum,
+        provisionalWindowMs,
+        enoughSamples: samples.length >= sendLatencyTestMinimumSamples,
+      }),
+    )
   }
 
   private getLatencySummary() {

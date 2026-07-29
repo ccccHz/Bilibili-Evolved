@@ -3,7 +3,7 @@ import { select } from '@/core/spin-query'
 import { addStyle } from '@/core/style'
 import { Toast } from '@/core/toast'
 import { getUserInfo } from '@/core/user-info'
-import { getUID, isIframe } from '@/core/utils'
+import { getUID } from '@/core/utils'
 import { liveUrls } from '@/core/utils/urls'
 import { DanmakuDiagnostics } from './diagnostics'
 import { LaplaceDanmakuObserver } from './laplace-adapter'
@@ -18,6 +18,7 @@ const customSendbarInputSelector = '.danmaku-send-bar input'
 const chatHistorySelector = '.chat-history-list'
 const danmakuItemSelector = '.danmaku-item[data-id_str]'
 const diagnosticLoggingEnabled = false
+const startupLoggingEnabled = true
 let observer: LaplaceDanmakuObserver | null = null
 let diagnostics: DanmakuDiagnostics | null = null
 let removeObserverListeners: (() => void) | null = null
@@ -28,6 +29,12 @@ let noticeTimer = 0
 const logDiagnostic = (...args: unknown[]) => {
   if (diagnosticLoggingEnabled) {
     console.log(...args)
+  }
+}
+
+const logStartup = (...args: unknown[]) => {
+  if (startupLoggingEnabled) {
+    console.info(componentName, ...args)
   }
 }
 
@@ -87,14 +94,44 @@ const cleanup = () => {
 
 const entry = async () => {
   cleanup()
-  if (!isIframe()) {
+  const entryVersion = lifecycleVersion
+  logStartup('starting', {
+    context: window === window.top ? 'top' : 'iframe',
+    href: window.location.href,
+  })
+  const sendContext = await select(
+    () => {
+      const chatHistory = document.querySelector(chatHistorySelector)
+      const originalInput = document.querySelector(originalTextAreaSelector)
+      const customInput = document.querySelector(customSendbarInputSelector)
+      const sendButton = document.querySelector(sendButtonSelector)
+      if (
+        !(chatHistory instanceof HTMLElement) ||
+        !(sendButton instanceof HTMLButtonElement) ||
+        (!originalInput && !customInput)
+      ) {
+        return null
+      }
+      return { chatHistory }
+    },
+    { maxRetry: 20, queryInterval: 500 },
+  )
+  if (!sendContext || entryVersion !== lifecycleVersion) {
+    logStartup('not started: send context was not found or was replaced')
     return
   }
+  logStartup('send context ready', {
+    context: window === window.top ? 'top' : 'iframe',
+  })
+  logDiagnostic(componentName, 'send context ready', {
+    context: window === window.top ? 'top' : 'iframe',
+    href: window.location.href,
+  })
   const currentUid = Number(getUID())
   if (!Number.isFinite(currentUid) || currentUid <= 0) {
+    logStartup('not started: no logged-in UID')
     return
   }
-  const entryVersion = lifecycleVersion
   let currentUsername: string | null = null
   try {
     const userInfo = (await getUserInfo()) as { uname?: unknown }
@@ -143,15 +180,14 @@ const entry = async () => {
       nextObserver.close()
       return
     }
-    logDiagnostic(componentName, 'Laplace observer ready', {
+    const observerReadyDetails = {
       roomId: config.roomId,
       address: config.address,
       hasBuvid: Boolean(config.buvid),
-    })
-    const chatHistory = (await select(chatHistorySelector)) as HTMLElement
-    if (entryVersion !== lifecycleVersion) {
-      return
     }
+    logStartup('observer ready', observerReadyDetails)
+    logDiagnostic(componentName, 'Laplace observer ready', observerReadyDetails)
+    const { chatHistory } = sendContext
     const getOriginalContent = () =>
       (document.querySelector(originalTextAreaSelector) as HTMLTextAreaElement | null)?.value || ''
     const captureContent = (
@@ -213,6 +249,7 @@ const entry = async () => {
       document.removeEventListener('keydown', onDocumentKeyDown, true)
       pageDanmakuObserver.disconnect()
     }
+    logStartup('send capture ready')
     logDiagnostic(componentName, 'send capture and page latency calibration ready')
   } catch (error) {
     if (entryVersion !== lifecycleVersion) {

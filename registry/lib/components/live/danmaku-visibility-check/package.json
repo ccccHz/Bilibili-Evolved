@@ -3,6 +3,9 @@
   "private": true,
   "version": "0.1.0",
   "description": "Module-local dependencies for the danmaku visibility check component.",
+  "scripts": {
+    "laplace-cli": "node laplace-cli.mjs"
+  },
   "dependencies": {
     "@laplace.live/ws": "8.0.3"
   },
