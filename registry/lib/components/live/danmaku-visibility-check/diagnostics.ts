@@ -384,8 +384,7 @@ export class DanmakuDiagnostics {
     const p50 = percentile(samples, 0.5)
     const p95 = percentile(samples, 0.95)
     const maximum = samples.length === 0 ? null : Math.max(...samples)
-    const provisionalWindowMs =
-      maximum === null ? null : Math.ceil((maximum + 300) / 100) * 100
+    const provisionalWindowMs = maximum === null ? null : Math.ceil((maximum + 300) / 100) * 100
     console.info(
       this.componentName,
       'send-latency-test',
