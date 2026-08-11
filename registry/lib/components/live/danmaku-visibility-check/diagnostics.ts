@@ -1,3 +1,4 @@
+import { DanmakuDiagnosticViewState, SendLatencyResult, SendWindowState } from './diagnostic-store'
 import { DanmakuDiagnosticSnapshot, ObservedDanmaku } from './types'
 
 const summaryInterval = 30000
@@ -9,8 +10,10 @@ const latencyCalibrationMinimumSamples = 10
 const maximumValidAbsoluteLatencyP95 = 1000
 const latencySampleLimit = 120
 const sendLatencySafetyMargin = 300
-const maximumDynamicSendLatencyP95 = fallbackSendMatchTimeout - sendLatencySafetyMargin
-const sendLatencySampleLimit = 30
+const sendWindowMinimumSamples = 30
+const minimumDynamicSendWindow = 1500
+const maximumDynamicSendWindow = 5000
+const sendLatencySampleLimit = 50
 const arrivalCacheLimit = 200
 const diagnosticLoggingEnabled = false
 // Temporary measurement mode: keep production diagnostics quiet, but emit only
@@ -18,6 +21,7 @@ const diagnosticLoggingEnabled = false
 const sendLatencyTestLoggingEnabled = false
 const sendLatencyTestTimeout = 10000
 const sendLatencyTestMinimumSamples = 10
+const measurementLoggingEnabled = true
 
 const logDiagnostic = (...args: unknown[]) => {
   if (diagnosticLoggingEnabled) {
@@ -37,7 +41,11 @@ interface PendingSend {
   id: number
   content: string
   capturedAt: number
-  timeout: number
+  alertTimeout: number
+  cleanupTimeout: number
+  matchWindowMs: number
+  lateObservationLimitMs: number
+  suspected: boolean
 }
 
 export interface PageDanmakuArrival {
@@ -47,7 +55,32 @@ export interface PageDanmakuArrival {
 }
 
 export interface DanmakuDiagnosticCallbacks {
-  onNotObserved?: (result: { content: string; waitedMs: number }) => void
+  onObserved?: (result: {
+    id: number
+    content: string
+    latencyMs: number
+    capturedAt: number
+    windowMs: number
+    lateObservationLimitMs: number
+  }) => void
+  onNotObserved?: (result: {
+    id: number
+    content: string
+    waitedMs: number
+    capturedAt: number
+    windowMs: number
+    lateObservationLimitMs: number
+  }) => void
+  onLateObserved?: (result: {
+    id: number
+    content: string
+    latencyMs: number
+    capturedAt: number
+    windowMs: number
+    lateObservationLimitMs: number
+  }) => void
+  onUpdate?: (state: Partial<DanmakuDiagnosticViewState>) => void
+  getConfiguredSendMatchTimeout?: () => number
 }
 
 const maskUsername = (username: string | null) => {
@@ -115,6 +148,36 @@ const percentile = (values: number[], proportion: number) => {
   return sorted[Math.ceil((sorted.length - 1) * proportion)]
 }
 
+export const calculateSendWindowCandidate = (samples: number[]) => {
+  const p99 = percentile(samples, 0.99)
+  if (samples.length < sendWindowMinimumSamples || p99 === null || !Number.isFinite(p99)) {
+    return { candidateWindowMs: fallbackSendMatchTimeout, p95: percentile(samples, 0.95), p99 }
+  }
+  return {
+    candidateWindowMs: Math.min(
+      maximumDynamicSendWindow,
+      Math.max(minimumDynamicSendWindow, Math.ceil((sendLatencySafetyMargin + p99) / 100) * 100),
+    ),
+    p95: percentile(samples, 0.95),
+    p99,
+  }
+}
+
+export const calculateSendWindow = (samples: number[], configuredWindowMs = 0) => {
+  if (Number.isFinite(configuredWindowMs) && configuredWindowMs > 0) {
+    return {
+      effectiveWindowMs: configuredWindowMs,
+      state: 'manual' as SendWindowState,
+      p95: percentile(samples, 0.95),
+    }
+  }
+  return {
+    effectiveWindowMs: fallbackSendMatchTimeout,
+    state: 'fixed-experience' as SendWindowState,
+    p95: percentile(samples, 0.95),
+  }
+}
+
 export class DanmakuDiagnostics {
   private snapshot = getInitialSnapshot()
   private timer = 0
@@ -126,7 +189,9 @@ export class DanmakuDiagnostics {
   private pageArrivals = new Map<string, number>()
   private observerMinusPageSamples: number[] = []
   private sendEndToEndSamples: number[] = []
+  private lateMatchedSends = 0
   private pairedArrivalCount = 0
+  private lastSendResult: SendLatencyResult | null = null
 
   constructor(
     private componentName: string,
@@ -140,6 +205,11 @@ export class DanmakuDiagnostics {
       this.timer = window.setInterval(() => this.logSummary('periodic'), summaryInterval)
       logDiagnostic(this.componentName, 'diagnostic started')
     }
+    this.emitUpdate()
+  }
+
+  refresh() {
+    this.emitUpdate()
   }
 
   captureSend(content: string) {
@@ -162,11 +232,16 @@ export class DanmakuDiagnostics {
     const matchTimeout = sendLatencyTestLoggingEnabled
       ? sendLatencyTestTimeout
       : this.getSendMatchTimeout()
-    const timeout = window.setTimeout(() => {
-      const pending = this.takePending(id)
+    const lateObservationLimitMs = Math.min(
+      10000,
+      Math.max(5000, Math.ceil((matchTimeout * 2) / 100) * 100),
+    )
+    const alertTimeout = window.setTimeout(() => {
+      const pending = this.pendingSends.find(item => item.id === id)
       if (!pending) {
         return
       }
+      pending.suspected = true
       this.snapshot.timedOutSends += 1
       const waitedMs = Date.now() - pending.capturedAt
       this.logSendLatencyTestResult({
@@ -186,10 +261,45 @@ export class DanmakuDiagnostics {
           }),
         )
       }
-      this.callbacks.onNotObserved?.({ content: pending.content, waitedMs })
+      this.callbacks.onNotObserved?.({
+        id: pending.id,
+        content: pending.content,
+        waitedMs,
+        capturedAt: pending.capturedAt,
+        windowMs: pending.matchWindowMs,
+        lateObservationLimitMs: pending.lateObservationLimitMs,
+      })
+      this.lastSendResult = {
+        content: pending.content,
+        status: 'not-observed',
+        elapsedMs: waitedMs,
+        recordedAt: Date.now(),
+      }
+      this.logMeasurementResult({
+        id: pending.id,
+        content: pending.content,
+        outcome: 'not-observed',
+        elapsedMs: waitedMs,
+        windowMs: pending.matchWindowMs,
+      })
+      this.emitUpdate()
     }, matchTimeout)
-    this.pendingSends.push({ id, content: normalizedContent, capturedAt, timeout })
+    const cleanupTimeout = window.setTimeout(() => {
+      this.takePending(id)
+      this.emitUpdate()
+    }, lateObservationLimitMs)
+    this.pendingSends.push({
+      id,
+      content: normalizedContent,
+      capturedAt,
+      alertTimeout,
+      cleanupTimeout,
+      matchWindowMs: matchTimeout,
+      lateObservationLimitMs,
+      suspected: false,
+    })
     this.snapshot.capturedSends += 1
+    this.emitUpdate()
     if (diagnosticLoggingEnabled) {
       logDiagnostic(
         this.componentName,
@@ -244,16 +354,50 @@ export class DanmakuDiagnostics {
     if (matchingSend) {
       const sendEndToEndMs = Date.now() - matchingSend.capturedAt
       this.takePending(matchingSend.id)
+      const wasLate = matchingSend.suspected
       this.sendEndToEndSamples.push(sendEndToEndMs)
       if (this.sendEndToEndSamples.length > sendLatencySampleLimit) {
         this.sendEndToEndSamples.splice(0, this.sendEndToEndSamples.length - sendLatencySampleLimit)
       }
       this.snapshot.matchedSends += 1
+      if (wasLate) {
+        this.lateMatchedSends += 1
+        this.callbacks.onLateObserved?.({
+          id: matchingSend.id,
+          content: matchingSend.content,
+          latencyMs: sendEndToEndMs,
+          capturedAt: matchingSend.capturedAt,
+          windowMs: matchingSend.matchWindowMs,
+          lateObservationLimitMs: matchingSend.lateObservationLimitMs,
+        })
+      } else {
+        this.callbacks.onObserved?.({
+          id: matchingSend.id,
+          content: matchingSend.content,
+          latencyMs: sendEndToEndMs,
+          capturedAt: matchingSend.capturedAt,
+          windowMs: matchingSend.matchWindowMs,
+          lateObservationLimitMs: matchingSend.lateObservationLimitMs,
+        })
+      }
+      this.lastSendResult = {
+        content: matchingSend.content,
+        status: wasLate ? 'observed-late' : 'observed',
+        elapsedMs: sendEndToEndMs,
+        recordedAt: Date.now(),
+      }
       this.logSendLatencyTestResult({
         id: matchingSend.id,
         content: matchingSend.content,
         status: 'observed',
         latencyMs: sendEndToEndMs,
+      })
+      this.logMeasurementResult({
+        id: matchingSend.id,
+        content: matchingSend.content,
+        outcome: wasLate ? 'observed-late' : 'observed',
+        elapsedMs: sendEndToEndMs,
+        windowMs: matchingSend.matchWindowMs,
       })
       if (diagnosticLoggingEnabled) {
         logDiagnostic(
@@ -271,6 +415,7 @@ export class DanmakuDiagnostics {
           }),
         )
       }
+      this.emitUpdate()
     }
     if (danmaku.uid === this.currentUid || danmaku.sendFromMe === true) {
       this.snapshot.own += 1
@@ -312,7 +457,10 @@ export class DanmakuDiagnostics {
       clearInterval(this.timer)
       this.timer = 0
     }
-    this.pendingSends.forEach(pending => clearTimeout(pending.timeout))
+    this.pendingSends.forEach(pending => {
+      clearTimeout(pending.alertTimeout)
+      clearTimeout(pending.cleanupTimeout)
+    })
     this.pendingSends = []
     this.observerArrivals.clear()
     this.pageArrivals.clear()
@@ -325,7 +473,8 @@ export class DanmakuDiagnostics {
       return null
     }
     const [pending] = this.pendingSends.splice(index, 1)
-    clearTimeout(pending.timeout)
+    clearTimeout(pending.alertTimeout)
+    clearTimeout(pending.cleanupTimeout)
     return pending
   }
 
@@ -352,6 +501,7 @@ export class DanmakuDiagnostics {
     ) {
       this.logLatencyCalibration()
     }
+    this.emitUpdate()
   }
 
   private trimArrivalCache(cache: Map<string, number>) {
@@ -365,11 +515,26 @@ export class DanmakuDiagnostics {
   }
 
   private getSendMatchTimeout() {
-    const p95 = percentile(this.sendEndToEndSamples, 0.95)
-    if (p95 === null || !Number.isFinite(p95) || p95 < 0 || p95 > maximumDynamicSendLatencyP95) {
-      return fallbackSendMatchTimeout
+    return calculateSendWindow(
+      this.sendEndToEndSamples,
+      this.callbacks.getConfiguredSendMatchTimeout?.() ?? 0,
+    ).effectiveWindowMs
+  }
+
+  private logMeasurementResult(result: {
+    id: number
+    content: string
+    outcome: 'observed' | 'observed-late' | 'not-observed'
+    elapsedMs: number
+    windowMs: number
+  }) {
+    if (!measurementLoggingEnabled) {
+      return
     }
-    return Math.max(100, Math.ceil((sendLatencySafetyMargin + p95) / 100) * 100)
+    console.info(this.componentName, 'visibility measurement', {
+      ...result,
+      recordedAt: Date.now(),
+    })
   }
 
   private logSendLatencyTestResult(
@@ -412,23 +577,14 @@ export class DanmakuDiagnostics {
       absoluteLatencyP95 !== null &&
       Number.isFinite(absoluteLatencyP95) &&
       absoluteLatencyP95 <= maximumValidAbsoluteLatencyP95
-    const sendEndToEndP95 = percentile(this.sendEndToEndSamples, 0.95)
-    const isValidSendWindow =
-      sendEndToEndP95 !== null &&
-      Number.isFinite(sendEndToEndP95) &&
-      sendEndToEndP95 >= 0 &&
-      sendEndToEndP95 <= maximumDynamicSendLatencyP95
+    const configuredWindowMs = this.callbacks.getConfiguredSendMatchTimeout?.() ?? 0
+    const sendWindow = calculateSendWindow(this.sendEndToEndSamples, configuredWindowMs)
+    const sendEndToEndP95 = sendWindow.p95
     let latencyCalibrationState = 'warming-up'
     if (isValidLatencyCalibration) {
       latencyCalibrationState = 'healthy'
     } else if (hasEnoughLatencyPairs) {
       latencyCalibrationState = 'abnormal'
-    }
-    let sendWindowState = 'fallback-no-samples'
-    if (isValidSendWindow) {
-      sendWindowState = 'dynamic'
-    } else if (sendEndToEndP95 !== null) {
-      sendWindowState = 'fallback-abnormal'
     }
     return {
       latencyPairs: this.observerMinusPageSamples.length,
@@ -439,9 +595,43 @@ export class DanmakuDiagnostics {
       sendEndToEndSamples: this.sendEndToEndSamples.length,
       sendEndToEndP50Ms: percentile(this.sendEndToEndSamples, 0.5),
       sendEndToEndP95Ms: sendEndToEndP95,
-      sendMatchTimeoutMs: this.getSendMatchTimeout(),
-      sendWindowState,
+      sendEndToEndMaxMs:
+        this.sendEndToEndSamples.length === 0 ? null : Math.max(...this.sendEndToEndSamples),
+      sessionSuggestedWindowMs:
+        this.sendEndToEndSamples.length < sendWindowMinimumSamples
+          ? null
+          : calculateSendWindowCandidate(this.sendEndToEndSamples).candidateWindowMs,
+      configuredWindowMs,
+      sendMatchTimeoutMs: sendWindow.effectiveWindowMs,
+      sendWindowState: sendWindow.state,
     }
+  }
+
+  private emitUpdate() {
+    const summary = this.getLatencySummary()
+    this.callbacks.onUpdate?.({
+      configuredWindowMs: summary.configuredWindowMs,
+      effectiveWindowMs: summary.sendMatchTimeoutMs,
+      fallbackWindowMs: fallbackSendMatchTimeout,
+      sendWindowState: summary.sendWindowState,
+      capturedSends: this.snapshot.capturedSends,
+      matchedSends: this.snapshot.matchedSends,
+      timedOutSends: this.snapshot.timedOutSends,
+      pendingSends: this.pendingSends.length,
+      latePendingSends: this.pendingSends.filter(pending => pending.suspected).length,
+      lateMatchedSends: this.lateMatchedSends,
+      sendEndToEndSamples: [...this.sendEndToEndSamples],
+      sendEndToEndP50Ms: summary.sendEndToEndP50Ms,
+      sendEndToEndP95Ms: summary.sendEndToEndP95Ms,
+      sendEndToEndMaxMs: summary.sendEndToEndMaxMs,
+      sessionSuggestedWindowMs: summary.sessionSuggestedWindowMs,
+      latencyPairs: summary.latencyPairs,
+      observerMinusPageSamples: [...this.observerMinusPageSamples],
+      observerMinusPageP50Ms: summary.observerMinusPageP50Ms,
+      observerMinusPageP95Ms: summary.observerMinusPageP95Ms,
+      absoluteLatencyP95Ms: summary.absoluteLatencyP95Ms,
+      lastSendResult: this.lastSendResult,
+    })
   }
 
   private logLatencyCalibration() {

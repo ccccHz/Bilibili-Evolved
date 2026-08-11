@@ -1,12 +1,22 @@
 import { defineComponentMetadata } from '@/components/define'
+import {
+  addComponentListener,
+  getComponentSettings,
+  removeComponentListener,
+} from '@/core/settings'
 import { select } from '@/core/spin-query'
 import { addStyle } from '@/core/style'
 import { Toast } from '@/core/toast'
 import { getUserInfo } from '@/core/user-info'
-import { getUID } from '@/core/utils'
+import { getUID, mountVueComponent } from '@/core/utils'
 import { liveUrls } from '@/core/utils/urls'
 import { DanmakuDiagnostics } from './diagnostics'
+import { resetDiagnosticViewState, updateDiagnosticViewState } from './diagnostic-store'
+import { markFailureObservedLate, recordSuspectedFailure } from './failure-history'
+import { closeVisibilityHistoryManager } from './history-manager-store'
 import { LaplaceDanmakuObserver } from './laplace-adapter'
+import { recordVisibilityMeasurement } from './measurement-history'
+import { DanmakuVisibilityCheckOptions, danmakuVisibilityCheckOptions } from './options'
 import { resolveObserverConfig } from './room-config'
 import noticeStyle from './notice.scss'
 import { ObservedDanmaku } from './types'
@@ -25,6 +35,25 @@ let removeObserverListeners: (() => void) | null = null
 let lifecycleVersion = 0
 let activeNotice: ReturnType<typeof Toast.mini> | null = null
 let noticeTimer = 0
+let historyManagerVm: Vue | null = null
+
+const ensureHistoryManager = async () => {
+  if (historyManagerVm) {
+    return
+  }
+  const HistoryManager = (await import('./VisibilityHistoryManager.vue')).default
+  historyManagerVm = mountVueComponent(HistoryManager)
+  document.body.appendChild(historyManagerVm.$el)
+}
+
+const destroyHistoryManager = () => {
+  closeVisibilityHistoryManager()
+  historyManagerVm?.$destroy()
+  historyManagerVm?.$el.remove()
+  historyManagerVm = null
+}
+
+const refreshDiagnosticsWindow = () => diagnostics?.refresh()
 
 const logDiagnostic = (...args: unknown[]) => {
   if (diagnosticLoggingEnabled) {
@@ -78,6 +107,7 @@ const showMiniNotice = (message: string) => {
 
 const cleanup = () => {
   lifecycleVersion += 1
+  removeComponentListener(`${componentName}.sendMatchTimeoutMs`, refreshDiagnosticsWindow)
   removeObserverListeners?.()
   removeObserverListeners = null
   diagnostics?.stop()
@@ -90,15 +120,23 @@ const cleanup = () => {
   }
   activeNotice?.tippy.destroy()
   activeNotice = null
+  resetDiagnosticViewState()
 }
 
-const entry = async () => {
+const load = async (settings: { options: DanmakuVisibilityCheckOptions }) => {
   cleanup()
   const entryVersion = lifecycleVersion
   logStartup('starting', {
     context: window === window.top ? 'top' : 'iframe',
     href: window.location.href,
   })
+  if (window === window.top) {
+    await ensureHistoryManager()
+    if (entryVersion !== lifecycleVersion) {
+      return
+    }
+  }
+  updateDiagnosticViewState({ observerStatus: 'starting' })
   const sendContext = await select(
     () => {
       const chatHistory = document.querySelector(chatHistorySelector)
@@ -143,20 +181,94 @@ const entry = async () => {
     return
   }
   const nextObserver = new LaplaceDanmakuObserver()
+  let activeRoomId: number | null = null
+  const measurementSessionId = `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`
+  const saveMeasurement = (result: {
+    id: number
+    content: string
+    capturedAt: number
+    outcome: 'observed' | 'observed-late' | 'not-observed'
+    latencyMs: number | null
+    windowMs: number
+    lateObservationLimitMs: number
+  }) =>
+    recordVisibilityMeasurement({
+      id: `${result.capturedAt}-${result.id}`,
+      schemaVersion: 1,
+      sessionId: measurementSessionId,
+      roomId: activeRoomId,
+      content: result.content,
+      capturedAt: result.capturedAt,
+      completedAt: Date.now(),
+      outcome: result.outcome,
+      latencyMs: result.latencyMs,
+      windowMs: result.windowMs,
+      lateObservationLimitMs: result.lateObservationLimitMs,
+    }).catch(error => console.error(componentName, '保存可见性测量样本失败', error))
   const nextDiagnostics = new DanmakuDiagnostics(componentName, currentUid, currentUsername, {
-    onNotObserved: ({ content, waitedMs }) => {
+    onObserved: ({ id, content, latencyMs, capturedAt, windowMs, lateObservationLimitMs }) => {
+      saveMeasurement({
+        id,
+        content,
+        capturedAt,
+        outcome: 'observed',
+        latencyMs,
+        windowMs,
+        lateObservationLimitMs,
+      })
+    },
+    onNotObserved: ({ id, content, waitedMs, capturedAt, windowMs, lateObservationLimitMs }) => {
       if (nextObserver.status !== 'ready') {
         showMiniNotice('无法判断弹幕可见性')
         return
       }
+      recordSuspectedFailure({
+        id: `${capturedAt}-${id}`,
+        roomId: activeRoomId,
+        content,
+        waitedMs,
+        windowMs,
+        lateObservationLimitMs,
+        recordedAt: capturedAt,
+      }).catch(error => console.error(componentName, '保存疑似屏蔽记录失败', error))
+      saveMeasurement({
+        id,
+        content,
+        capturedAt,
+        outcome: 'not-observed',
+        latencyMs: null,
+        windowMs,
+        lateObservationLimitMs,
+      })
       logDiagnostic(componentName, 'showing possible block notice', { waitedMs })
       showMiniNotice(`「${content}」可能被屏蔽`)
     },
+    onLateObserved: ({ id, content, latencyMs, capturedAt, windowMs, lateObservationLimitMs }) => {
+      markFailureObservedLate(`${capturedAt}-${id}`, latencyMs).catch(error =>
+        console.error(componentName, '回撤疑似屏蔽记录失败', error),
+      )
+      saveMeasurement({
+        id,
+        content,
+        capturedAt,
+        outcome: 'observed-late',
+        latencyMs,
+        windowMs,
+        lateObservationLimitMs,
+      })
+      showMiniNotice(`「${content}」已迟到出现，已撤回疑似屏蔽判断`)
+    },
+    onUpdate: updateDiagnosticViewState,
+    getConfiguredSendMatchTimeout: () => settings.options.sendMatchTimeoutMs,
   })
   const onDanmaku = (event: Event) => {
     nextDiagnostics.record(true, (event as CustomEvent<ObservedDanmaku | null>).detail)
   }
   const onStatus = (event: Event) => {
+    const status = (event as CustomEvent<string>).detail
+    if (status === 'connecting' || status === 'ready' || status === 'error') {
+      updateDiagnosticViewState({ observerStatus: status })
+    }
     logDiagnostic(componentName, 'observer status', (event as CustomEvent).detail)
   }
   nextObserver.addEventListener('danmaku', onDanmaku)
@@ -167,14 +279,17 @@ const entry = async () => {
   }
   observer = nextObserver
   diagnostics = nextDiagnostics
+  addComponentListener(`${componentName}.sendMatchTimeoutMs`, refreshDiagnosticsWindow)
   nextDiagnostics.start()
 
   try {
     const config = await resolveObserverConfig()
+    activeRoomId = config.roomId
     if (entryVersion !== lifecycleVersion) {
       nextObserver.close()
       return
     }
+    updateDiagnosticViewState({ observerStatus: 'connecting' })
     await nextObserver.connect(config)
     if (entryVersion !== lifecycleVersion) {
       nextObserver.close()
@@ -186,6 +301,7 @@ const entry = async () => {
       hasBuvid: Boolean(config.buvid),
     }
     logStartup('observer ready', observerReadyDetails)
+    updateDiagnosticViewState({ observerStatus: 'ready' })
     logDiagnostic(componentName, 'Laplace observer ready', observerReadyDetails)
     const { chatHistory } = sendContext
     const getOriginalContent = () =>
@@ -257,8 +373,16 @@ const entry = async () => {
     }
     console.error(componentName, error)
     cleanup()
+    updateDiagnosticViewState({ observerStatus: 'error' })
     Toast.error(String(error), '直播弹幕可见性检测启动失败', 6000)
   }
+}
+
+const reload = () => load(getComponentSettings<DanmakuVisibilityCheckOptions>(componentName))
+
+const unload = () => {
+  cleanup()
+  destroyHistoryManager()
 }
 
 export const component = defineComponentMetadata({
@@ -270,8 +394,10 @@ export const component = defineComponentMetadata({
   },
   tags: [componentsTags.live, componentsTags.experimental],
   enabledByDefault: false,
-  entry,
-  reload: entry,
-  unload: cleanup,
+  options: danmakuVisibilityCheckOptions,
+  extraOptions: () => import('./DiagnosticsPanel.vue').then(m => m.default),
+  entry: ({ settings }) => load(settings),
+  reload,
+  unload,
   urlInclude: liveUrls,
 })
