@@ -11,6 +11,11 @@ export const publishedComponents: PublishedComponent[] = [
     description: '通过独立弹幕流检查本地发送的弹幕是否可能被屏蔽.',
   },
   {
+    id: 'live/danmaku-send-history',
+    displayName: '直播弹幕发送历史',
+    description: '使用上下方向键切换当前直播间发送过的弹幕.',
+  },
+  {
     id: 'live/autoResolution',
     displayName: '直播自动高分辨率',
     description: '进入直播间后自动切换到可用的最高分辨率.',

@@ -9,6 +9,7 @@ on:
       - .github/workflows/custom-components-pages.yml
       - custom-registry/**
       - registry/lib/components/live/autoResolution/**
+      - registry/lib/components/live/danmaku-send-history/**
       - registry/lib/components/live/danmaku-visibility-check/**
       - registry/lib/components/live/liveData-reAdd/**
 
