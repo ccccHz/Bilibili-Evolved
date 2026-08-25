@@ -5,6 +5,7 @@ registry 全局依赖或 Webpack 配置.
 
 当前发布:
 
+- `live/danmaku-hover-actions`
 - `live/danmaku-visibility-check`
 - `live/danmaku-send-history`
 - `live/autoResolution`

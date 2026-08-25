@@ -6,6 +6,11 @@ export interface PublishedComponent {
 
 export const publishedComponents: PublishedComponent[] = [
   {
+    id: 'live/danmaku-hover-actions',
+    displayName: '直播弹幕悬停操作',
+    description: '悬停冻结直播飘屏弹幕，并提供 +1、@回复和复制操作.',
+  },
+  {
     id: 'live/danmaku-visibility-check',
     displayName: '直播弹幕公开可见性检测',
     description: '通过独立弹幕流检查本地发送的弹幕是否可能被屏蔽.',

@@ -1,0 +1,63 @@
+.web-player-danmaku .bili-danmaku-x-dm {
+  pointer-events: auto !important;
+}
+
+.be-live-danmaku-action-target {
+  animation-play-state: paused !important;
+  cursor: pointer !important;
+  z-index: 201 !important;
+}
+
+.be-live-danmaku-action-source {
+  visibility: hidden !important;
+}
+
+.be-live-danmaku-action-snapshot {
+  overflow: visible !important;
+  white-space: nowrap !important;
+  cursor: pointer !important;
+}
+
+.be-live-danmaku-actions {
+  position: fixed;
+  z-index: 100000;
+  display: flex;
+  gap: 4px;
+  align-items: center;
+  padding: 5px;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 8px;
+  background: rgba(20, 20, 24, 0.92);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.35);
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(-3px);
+  transition: opacity 100ms ease, transform 100ms ease;
+  backdrop-filter: blur(8px);
+
+  &.be-live-danmaku-actions-visible {
+    opacity: 1;
+    pointer-events: auto;
+    transform: translateY(0);
+  }
+
+  button {
+    min-width: 42px;
+    height: 28px;
+    padding: 0 9px;
+    border: 0;
+    border-radius: 5px;
+    background: transparent;
+    color: #fff;
+    font-size: 13px;
+    line-height: 28px;
+    white-space: nowrap;
+    cursor: pointer;
+
+    &:hover,
+    &:focus-visible {
+      outline: none;
+      background: var(--theme-color, #00aeec);
+    }
+  }
+}
