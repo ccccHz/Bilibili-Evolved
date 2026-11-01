@@ -16,6 +16,11 @@ export const publishedComponents: PublishedComponent[] = [
     description: '通过独立弹幕流检查本地发送的弹幕是否可能被屏蔽.',
   },
   {
+    id: 'live/player-position',
+    displayName: '直播播放器定位与网页全屏记忆',
+    description: '记住网页全屏状态，刷新后恢复；播放器不可充分见时有界定位，手动滚动后停止.',
+  },
+  {
     id: 'live/danmaku-send-history',
     displayName: '直播弹幕发送历史',
     description: '使用上下方向键切换当前直播间发送过的弹幕.',

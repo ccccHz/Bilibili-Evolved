@@ -7,6 +7,7 @@ registry 全局依赖或 Webpack 配置.
 
 - `live/danmaku-hover-actions`
 - `live/danmaku-visibility-check`
+- `live/player-position`（默认关闭，安装后按需开启）
 - `live/danmaku-send-history`
 - `live/autoResolution`
 - `live/liveData-reAdd`

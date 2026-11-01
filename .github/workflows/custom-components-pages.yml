@@ -12,6 +12,7 @@ on:
       - registry/lib/components/live/danmaku-hover-actions/**
       - registry/lib/components/live/danmaku-send-history/**
       - registry/lib/components/live/danmaku-visibility-check/**
+      - registry/lib/components/live/player-position/**
       - registry/lib/components/live/liveData-reAdd/**
 
 permissions:
@@ -44,8 +45,8 @@ jobs:
         run: pnpm --dir registry/lib/components/live/danmaku-visibility-check install --frozen-lockfile
       - name: Check publisher types
         run: pnpm exec tsc -p custom-registry/tsconfig.json --noEmit
-      - name: Test custom component protocol handling
-        run: pnpm exec tsx --test registry/lib/components/live/danmaku-visibility-check/*.test.js
+      - name: Test custom live components
+        run: pnpm exec tsx --test registry/lib/components/live/danmaku-visibility-check/*.test.js registry/lib/components/live/danmaku-hover-actions/*.test.js registry/lib/components/live/player-position/*.test.js
       - name: Build custom component site
         run: pnpm tsx custom-registry/build.ts
       - name: Publish GitHub Raw artifacts
