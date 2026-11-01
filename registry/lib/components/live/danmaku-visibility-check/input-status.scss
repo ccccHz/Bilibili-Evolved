@@ -1,36 +1,70 @@
+.be-live-observer-row {
+  display: flex !important;
+  align-items: center;
+  justify-content: space-between;
+  gap: 2px;
+
+  &::before,
+  &::after {
+    display: none !important;
+  }
+
+  > .icon-left-part,
+  > .icon-right-part {
+    flex: 0 0 auto;
+  }
+}
+
 .be-live-observer-status {
-  display: inline-block;
+  --observer-color: #d8a451;
+  display: inline-flex;
+  flex: 0 1 auto;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  min-width: 0;
   max-width: 100%;
-  margin: 2px 4px;
-  padding: 0 4px;
+  margin: 0;
+  padding: 2px 3px;
   border: 0;
-  border-radius: 3px;
+  border-radius: 4px;
   background: transparent;
-  color: #b26b14;
-  font: 11px/18px sans-serif;
-  vertical-align: middle;
+  color: inherit;
+  font: 11px/20px sans-serif;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
   cursor: pointer;
 
+  &::before {
+    content: '';
+    flex: 0 0 5px;
+    width: 5px;
+    height: 5px;
+    border-radius: 50%;
+    background: var(--observer-color);
+  }
+
   &:disabled {
-    opacity: 1;
+    opacity: 0.85;
     cursor: default;
   }
 
+  &:enabled:hover,
+  &:focus-visible {
+    background: #8882;
+    outline: 1px solid #8885;
+  }
+
   &[data-status='ready'] {
-    color: #378549;
+    --observer-color: #62ad75;
   }
 
   &[data-status='error'] {
-    color: #d34a40;
+    --observer-color: #e46d65;
   }
 }
 
 .danmaku-send-bar .be-live-observer-status {
   flex: 0 0 auto;
-  white-space: nowrap;
   margin: 0 4px;
-
-  &[data-status='ready'] {
-    color: #79c085;
-  }
 }
