@@ -84,3 +84,20 @@ test('keeps timed out sends in the background and retracts a late match', async 
   diagnostics.stop()
   globalThis.window = originalWindow
 })
+
+test('connection loss cancels pending visibility decisions instead of recording a missing message', async () => {
+  const previousWindow = globalThis.window
+  globalThis.window = globalThis
+  let misses = 0
+  const diagnostics = new DanmakuDiagnostics('test', 1, null, {
+    getConfiguredSendMatchTimeout: () => 20,
+    onNotObserved: () => { misses += 1 },
+  })
+  diagnostics.captureSend('cancel-on-disconnect')
+  assert.equal(diagnostics.cancelPendingObservation(), true)
+  await new Promise(resolve => setTimeout(resolve, 35))
+  assert.equal(misses, 0)
+  assert.equal(diagnostics.cancelPendingObservation(), false)
+  diagnostics.stop()
+  globalThis.window = previousWindow
+})

@@ -5,7 +5,7 @@ import {
   removeComponentListener,
 } from '@/core/settings'
 import { select } from '@/core/spin-query'
-import { addStyle } from '@/core/style'
+import { addStyle, removeStyle } from '@/core/style'
 import { Toast } from '@/core/toast'
 import { getUserInfo } from '@/core/user-info'
 import { getUID, mountVueComponent } from '@/core/utils'
@@ -14,7 +14,9 @@ import { DanmakuDiagnostics } from './diagnostics'
 import { resetDiagnosticViewState, updateDiagnosticViewState } from './diagnostic-store'
 import { markFailureObservedLate, recordSuspectedFailure } from './failure-history'
 import { closeVisibilityHistoryManager } from './history-manager-store'
-import { LaplaceDanmakuObserver } from './laplace-adapter'
+import { ObserverRecovery, RecoveryStatus } from './observer-recovery'
+import { mountInputStatus } from './input-status'
+import inputStatusStyle from './input-status.scss'
 import { recordVisibilityMeasurement } from './measurement-history'
 import { DanmakuVisibilityCheckOptions, danmakuVisibilityCheckOptions } from './options'
 import { resolveObserverConfig } from './room-config'
@@ -29,13 +31,15 @@ const chatHistorySelector = '.chat-history-list'
 const danmakuItemSelector = '.danmaku-item[data-id_str]'
 const diagnosticLoggingEnabled = false
 const startupLoggingEnabled = true
-let observer: LaplaceDanmakuObserver | null = null
+let observer: ObserverRecovery | null = null
+let disposeInputStatus: (() => void) | null = null
 let diagnostics: DanmakuDiagnostics | null = null
 let removeObserverListeners: (() => void) | null = null
 let lifecycleVersion = 0
 let activeNotice: ReturnType<typeof Toast.mini> | null = null
 let noticeTimer = 0
 let historyManagerVm: Vue | null = null
+let waitingForContext: MutationObserver | null = null
 
 const ensureHistoryManager = async () => {
   if (historyManagerVm) {
@@ -107,9 +111,14 @@ const showMiniNotice = (message: string) => {
 
 const cleanup = () => {
   lifecycleVersion += 1
+  waitingForContext?.disconnect()
+  waitingForContext = null
   removeComponentListener(`${componentName}.sendMatchTimeoutMs`, refreshDiagnosticsWindow)
   removeObserverListeners?.()
   removeObserverListeners = null
+  disposeInputStatus?.()
+  disposeInputStatus = null
+  removeStyle(`${componentName}-input-status`)
   diagnostics?.stop()
   diagnostics = null
   observer?.close()
@@ -154,10 +163,29 @@ const load = async (settings: { options: DanmakuVisibilityCheckOptions }) => {
     },
     { maxRetry: 20, queryInterval: 500 },
   )
-  if (!sendContext || entryVersion !== lifecycleVersion) {
-    logStartup('not started: send context was not found or was replaced')
+  if (entryVersion !== lifecycleVersion) {
     return
   }
+  if (!sendContext) {
+    updateDiagnosticViewState({ observerStatus: 'inactive' })
+    // A collapsed/rebuilt chat may return after startup's bounded wait.
+    // Stay event-driven without a polling loop or a live socket.
+    waitingForContext = new MutationObserver(() => {
+      if (
+        document.querySelector(chatHistorySelector) &&
+        document.querySelector(sendButtonSelector) &&
+        document.querySelector(`${originalTextAreaSelector}, ${customSendbarInputSelector}`)
+      ) {
+        waitingForContext?.disconnect()
+        waitingForContext = null
+        load(settings).catch(error => console.error(componentName, error))
+      }
+    })
+    waitingForContext.observe(document.body, { childList: true, subtree: true })
+    logStartup('waiting for send context')
+    return
+  }
+
   logStartup('send context ready', {
     context: window === window.top ? 'top' : 'iframe',
   })
@@ -180,8 +208,7 @@ const load = async (settings: { options: DanmakuVisibilityCheckOptions }) => {
   if (entryVersion !== lifecycleVersion) {
     return
   }
-  const nextObserver = new LaplaceDanmakuObserver()
-  let activeRoomId: number | null = null
+  const nextObserver = new ObserverRecovery(resolveObserverConfig)
   const measurementSessionId = `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`
   const saveMeasurement = (result: {
     id: number
@@ -196,7 +223,7 @@ const load = async (settings: { options: DanmakuVisibilityCheckOptions }) => {
       id: `${result.capturedAt}-${result.id}`,
       schemaVersion: 1,
       sessionId: measurementSessionId,
-      roomId: activeRoomId,
+      roomId: nextObserver.roomId,
       content: result.content,
       capturedAt: result.capturedAt,
       completedAt: Date.now(),
@@ -224,7 +251,7 @@ const load = async (settings: { options: DanmakuVisibilityCheckOptions }) => {
       }
       recordSuspectedFailure({
         id: `${capturedAt}-${id}`,
-        roomId: activeRoomId,
+        roomId: nextObserver.roomId,
         content,
         waitedMs,
         windowMs,
@@ -265,9 +292,12 @@ const load = async (settings: { options: DanmakuVisibilityCheckOptions }) => {
     nextDiagnostics.record(true, (event as CustomEvent<ObservedDanmaku | null>).detail)
   }
   const onStatus = (event: Event) => {
-    const status = (event as CustomEvent<string>).detail
-    if (status === 'connecting' || status === 'ready' || status === 'error') {
+    const status = (event as CustomEvent<RecoveryStatus>).detail
+    if (status !== 'idle') {
       updateDiagnosticViewState({ observerStatus: status })
+    }
+    if (status !== 'ready' && nextDiagnostics.cancelPendingObservation()) {
+      showMiniNotice('匿名观察连接中断，无法判断本次弹幕可见性')
     }
     logDiagnostic(componentName, 'observer status', (event as CustomEvent).detail)
   }
@@ -283,26 +313,8 @@ const load = async (settings: { options: DanmakuVisibilityCheckOptions }) => {
   nextDiagnostics.start()
 
   try {
-    const config = await resolveObserverConfig()
-    activeRoomId = config.roomId
-    if (entryVersion !== lifecycleVersion) {
-      nextObserver.close()
-      return
-    }
-    updateDiagnosticViewState({ observerStatus: 'connecting' })
-    await nextObserver.connect(config)
-    if (entryVersion !== lifecycleVersion) {
-      nextObserver.close()
-      return
-    }
-    const observerReadyDetails = {
-      roomId: config.roomId,
-      address: config.address,
-      hasBuvid: Boolean(config.buvid),
-    }
-    logStartup('observer ready', observerReadyDetails)
-    updateDiagnosticViewState({ observerStatus: 'ready' })
-    logDiagnostic(componentName, 'Laplace observer ready', observerReadyDetails)
+    addStyle(inputStatusStyle, `${componentName}-input-status`)
+    disposeInputStatus = mountInputStatus(nextObserver, () => settings.options.showChatSpeed)
     const { chatHistory } = sendContext
     const getOriginalContent = () =>
       (document.querySelector(originalTextAreaSelector) as HTMLTextAreaElement | null)?.value || ''
@@ -314,6 +326,12 @@ const load = async (settings: { options: DanmakuVisibilityCheckOptions }) => {
         source,
         hasContent: Boolean(content.trim()),
       })
+      if (nextObserver.status !== 'ready') {
+        if (content.trim()) {
+          showMiniNotice('匿名观察连接暂不可用，无法判断弹幕可见性')
+        }
+        return
+      }
       nextDiagnostics.captureSend(content)
     }
     const onDocumentClick = (event: MouseEvent) => {
@@ -342,12 +360,38 @@ const load = async (settings: { options: DanmakuVisibilityCheckOptions }) => {
       if (!(item instanceof HTMLElement)) {
         return
       }
+      nextObserver.recordPageActivity(item.dataset.id_str || '')
       nextDiagnostics.recordPageDanmaku({
         messageId: item.dataset.id_str || '',
         content: item.dataset.danmaku || '',
         username: item.dataset.uname || null,
       })
     }
+    const initialPath = location.pathname
+    let reloading = false
+    const checkContext = () => {
+      if (!reloading && (location.pathname !== initialPath || !chatHistory.isConnected)) {
+        reloading = true
+        load(settings).catch(error => console.error(componentName, error))
+      }
+    }
+    const onOnline = () => {
+      if (nextObserver.status !== 'ready') {
+        nextObserver.retry()
+      }
+    }
+    window.addEventListener('online', onOnline)
+    window.addEventListener('popstate', checkContext)
+    const onPageHide = () => nextObserver.close()
+    const onPageShow = (event: PageTransitionEvent) => {
+      if (event.persisted) {
+        nextObserver.start()
+      }
+    }
+    window.addEventListener('pagehide', onPageHide)
+    window.addEventListener('pageshow', onPageShow)
+    const contextObserver = new MutationObserver(checkContext)
+    contextObserver.observe(document.body, { childList: true, subtree: true })
     const pageDanmakuObserver = new MutationObserver(records => {
       records.forEach(record => {
         record.addedNodes.forEach(node => {
@@ -364,7 +408,13 @@ const load = async (settings: { options: DanmakuVisibilityCheckOptions }) => {
       document.removeEventListener('click', onDocumentClick, true)
       document.removeEventListener('keydown', onDocumentKeyDown, true)
       pageDanmakuObserver.disconnect()
+      contextObserver.disconnect()
+      window.removeEventListener('online', onOnline)
+      window.removeEventListener('popstate', checkContext)
+      window.removeEventListener('pagehide', onPageHide)
+      window.removeEventListener('pageshow', onPageShow)
     }
+    nextObserver.start()
     logStartup('send capture ready')
     logDiagnostic(componentName, 'send capture and page latency calibration ready')
   } catch (error) {

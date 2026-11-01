@@ -11,15 +11,32 @@ import { parseDanmakuMessage } from './danmaku-message'
 import { parseDanmakuAuthReply } from './auth-reply'
 
 const LiveWS = RuntimeLiveWS as LaplaceLiveClientConstructor
-const connectionTimeout = 10000
 
+export interface ObserverHealth {
+  transportOpen: boolean
+  authenticated: boolean
+  lastHeartbeatAt: number | null
+  lastMessageAt: number | null
+}
+
+/** One transport only. Recovery belongs to ObserverRecovery, never to the library. */
 export class LaplaceDanmakuObserver extends EventTarget {
   status: ObserverStatus = 'idle'
-  private client: LaplaceLiveClient | null = null
+  lastError: string | null = null
+  health: ObserverHealth = {
+    transportOpen: false,
+    authenticated: false,
+    lastHeartbeatAt: null,
+    lastMessageAt: null,
+  }
+
+  private disposeConnection: (() => void) | null = null
   private connectTask: Promise<void> | null = null
 
   constructor(
     private createWebSocket: (address: string) => WebSocket = address => new WebSocket(address),
+    private timeouts = { connection: 10000, heartbeat: 90000 },
+    private Client = LiveWS,
   ) {
     super()
   }
@@ -32,8 +49,7 @@ export class LaplaceDanmakuObserver extends EventTarget {
       await this.connectTask
       return
     }
-    this.status = 'connecting'
-    this.dispatchStatus()
+    this.setStatus('connecting')
     this.connectTask = this.open(config)
     try {
       await this.connectTask
@@ -43,122 +59,103 @@ export class LaplaceDanmakuObserver extends EventTarget {
   }
 
   close() {
-    if (this.status === 'closed' || this.status === 'idle') {
-      return
-    }
     this.setStatus('closing')
-    const { client } = this
-    this.client = null
-    client?.close()
+    this.disposeConnection?.()
+    this.disposeConnection = null
     this.setStatus('closed')
   }
 
   private open(config: DanmakuObserverConfig) {
+    this.lastError = null
     return new Promise<void>((resolve, reject) => {
-      let entered = false
       let settled = false
-      let timeout = 0
-      let finish: (error?: Error) => void
-      let socket: WebSocket | null = null
+      let disposed = false
+      let timeout: ReturnType<typeof setTimeout>
+      let socket: WebSocket
       let client: LaplaceLiveClient
+      let invalidMessages = 0
+      this.health = {
+        transportOpen: false,
+        authenticated: false,
+        lastHeartbeatAt: null,
+        lastMessageAt: null,
+      }
 
-      const onLive = () => {
-        entered = true
+      const removeListeners: (() => void)[] = []
+      const dispose = () => {
+        if (disposed) {
+          return
+        }
+        disposed = true
+        clearTimeout(timeout)
+        removeListeners.forEach(remove => remove())
+        this.health.transportOpen = false
+        this.health.authenticated = false
+        client?.close()
+        if (!settled) {
+          settled = true
+          reject(new Error('Laplace 观察连接在就绪前关闭'))
+        }
+      }
+      const fail = (message: string) => {
+        if (disposed) {
+          return
+        }
+        this.lastError = message
+        if (!settled) {
+          settled = true
+          reject(new Error(message))
+        }
+        dispose()
+        this.setStatus('error')
+      }
+      const armHeartbeatDeadline = () => {
+        clearTimeout(timeout)
+        timeout = setTimeout(() => fail('匿名观察连接心跳超时'), this.timeouts.heartbeat)
+      }
+      const onOpen = () => {
+        this.health.transportOpen = true
+        this.dispatchHealth()
       }
       const onHeartbeat = () => {
-        if (entered) {
-          finish()
+        if (disposed || !this.health.authenticated) {
+          return
         }
+        this.health.lastHeartbeatAt = Date.now()
+        armHeartbeatDeadline()
+        if (!settled) {
+          settled = true
+          this.setStatus('ready')
+          resolve()
+        }
+        this.dispatchHealth()
       }
       const onError = () => {
-        if (!settled) {
-          finish(new Error('Laplace 观察连接发生错误'))
-          return
-        }
-        if (this.client === client) {
-          this.status = 'error'
-          this.dispatchStatus()
-        }
+        fail('Laplace 观察连接发生错误')
       }
       const onClose = () => {
-        if (!settled) {
-          finish(new Error('Laplace 观察连接在就绪前关闭'))
-          return
-        }
-        if (this.client === client) {
-          this.client = null
-          this.status = 'closed'
-          this.dispatchStatus()
-        }
+        fail('Laplace 观察连接已断开')
       }
       const onSocketMessage = (event: MessageEvent) => {
-        if (!(event.data instanceof ArrayBuffer)) {
+        if (disposed || !(event.data instanceof ArrayBuffer)) {
           return
         }
         const reply = parseDanmakuAuthReply(event.data)
         if (!reply) {
           return
         }
-        if (reply.code === 0) {
+        if (reply.code !== 0) {
+          const code = reply.code === null ? '无法解析' : String(reply.code)
+          fail(`Laplace 观察连接鉴权失败（code ${code}）${reply.message || ''}`)
           return
         }
-        const detail = reply.message ? `：${reply.message}` : ''
-        const code = reply.code === null ? '无法解析' : String(reply.code)
-        finish(new Error(`Laplace 观察连接鉴权失败（code ${code}）${detail}`))
+        this.health.authenticated = true
+        this.dispatchHealth()
       }
-
-      client = new LiveWS(config.roomId, {
-        protover: 3,
-        key: config.key,
-        address: config.address,
-        uid: 0,
-        buvid: config.buvid,
-        createWebSocket: address => {
-          socket = this.createWebSocket(address)
-          socket.binaryType = 'arraybuffer'
-          socket.addEventListener('message', onSocketMessage)
-          return socket
-        },
-      })
-      this.client = client
-
-      finish = (error?: Error) => {
-        if (settled) {
+      const onMessage = (event: Event) => {
+        if (disposed || !this.health.authenticated) {
           return
         }
-        settled = true
-        clearTimeout(timeout)
-        client.removeEventListener('live', onLive)
-        client.removeEventListener('heartbeat', onHeartbeat)
-        socket?.removeEventListener('message', onSocketMessage)
-        if (error) {
-          const intentionallyClosed = this.status === 'closing' || this.status === 'closed'
-          client.removeEventListener('error', onError)
-          client.removeEventListener('close', onClose)
-          this.status = intentionallyClosed ? 'closed' : 'error'
-          this.dispatchStatus()
-          if (!intentionallyClosed) {
-            client.close()
-          }
-          this.client = null
-          reject(error)
-          return
-        }
-        this.status = 'ready'
-        this.dispatchStatus()
-        resolve()
-      }
-
-      timeout = window.setTimeout(
-        () => finish(new Error('Laplace 观察连接鉴权或心跳超时')),
-        connectionTimeout,
-      )
-
-      client.addEventListener('live', onLive)
-      client.addEventListener('heartbeat', onHeartbeat)
-      client.addEventListener('error', onError)
-      client.addEventListener('close', onClose)
-      client.addEventListener('msg', event => {
         const raw = (event as LaplaceDataEvent).data
         const command =
           raw && typeof raw === 'object'
@@ -168,17 +165,53 @@ export class LaplaceDanmakuObserver extends EventTarget {
         if (typeof command !== 'string' || command.split(':')[0] !== 'DANMU_MSG') {
           return
         }
-        this.dispatchEvent(
-          new CustomEvent<ObservedDanmaku | null>('danmaku', {
-            detail: parseDanmakuMessage(raw),
-          }),
-        )
-      })
+        const payload = raw as { info?: unknown; msg?: unknown }
+        const parsed = parseDanmakuMessage(payload?.info ? payload : payload?.msg)
+        if (parsed) {
+          invalidMessages = 0
+          this.health.lastMessageAt = Date.now()
+        } else {
+          invalidMessages += 1
+        }
+        this.dispatchEvent(new CustomEvent<ObservedDanmaku | null>('danmaku', { detail: parsed }))
+        if (invalidMessages >= 5) {
+          fail('连续弹幕无法解析，观察链路已降级')
+        }
+      }
+
+      const listen = (target: EventTarget, type: string, callback: EventListener) => {
+        target.addEventListener(type, callback)
+        removeListeners.push(() => target.removeEventListener(type, callback))
+      }
+      this.disposeConnection = dispose
+      timeout = setTimeout(() => fail('Laplace 观察连接鉴权或心跳超时'), this.timeouts.connection)
+      try {
+        client = new this.Client(config.roomId, {
+          protover: 3,
+          key: config.key,
+          address: config.address,
+          uid: 0,
+          buvid: config.buvid,
+          createWebSocket: address => {
+            socket = this.createWebSocket(address)
+            socket.binaryType = 'arraybuffer'
+            listen(socket, 'message', onSocketMessage)
+            listen(socket, 'open', onOpen)
+            return socket
+          },
+        })
+        listen(client, 'heartbeat', onHeartbeat)
+        listen(client, 'msg', onMessage)
+        listen(client, 'error', onError)
+        listen(client, 'close', onClose)
+      } catch (error) {
+        fail(String(error))
+      }
     })
   }
 
-  private dispatchStatus() {
-    this.dispatchEvent(new CustomEvent('status', { detail: this.status }))
+  private dispatchHealth() {
+    this.dispatchEvent(new CustomEvent('health', { detail: { ...this.health } }))
   }
 
   private setStatus(status: ObserverStatus) {
@@ -186,6 +219,6 @@ export class LaplaceDanmakuObserver extends EventTarget {
       return
     }
     this.status = status
-    this.dispatchStatus()
+    this.dispatchEvent(new CustomEvent('status', { detail: status }))
   }
 }

@@ -95,7 +95,10 @@ export default defineComponent({
         starting: '启动中',
         connecting: '连接中',
         ready: '已就绪',
-        error: '异常',
+        error: '异常（可手动重试）',
+        retrying: '等待重连',
+        closing: '关闭中',
+        closed: '已关闭',
       }[this.state.observerStatus]
     },
     windowStateText(): string {

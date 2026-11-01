@@ -19,6 +19,10 @@ export const validateManualSendMatchTimeout = (value: number, oldValue: number) 
 }
 
 export const danmakuVisibilityCheckOptions = defineOptionsMetadata({
+  showChatSpeed: {
+    displayName: '输入框显示弹幕时速（最近 5 秒折算条/分）',
+    defaultValue: true,
+  },
   sendMatchTimeoutMs: {
     displayName: '检测窗口 (ms，0 = 经验值 2200)',
     defaultValue: 0,

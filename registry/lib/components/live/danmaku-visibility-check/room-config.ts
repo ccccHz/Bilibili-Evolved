@@ -1,4 +1,3 @@
-import { getJson } from '@/core/ajax'
 import { getCookieValue } from '@/core/utils'
 import { DanmakuObserverConfig } from './types'
 
@@ -38,9 +37,18 @@ const requireData = <T>(response: BilibiliResponse<T>, operation: string): T => 
   return response.data
 }
 
-const getLongRoomId = async (shortRoomId: number) => {
+const getJson = async <T>(url: string, signal: AbortSignal): Promise<T> => {
+  const response = await fetch(url, { credentials: 'omit', signal })
+  if (!response.ok) {
+    throw new Error(`获取观察连接配置失败: HTTP ${response.status}`)
+  }
+  return response.json()
+}
+
+const getLongRoomId = async (shortRoomId: number, signal: AbortSignal) => {
   const response = await getJson<BilibiliResponse<RoomInitData>>(
     `https://api.live.bilibili.com/room/v1/Room/mobileRoomInit?id=${shortRoomId}`,
+    signal,
   )
   const { room_id: roomId } = requireData(response, '解析直播间号')
   if (!Number.isFinite(roomId) || roomId <= 0) {
@@ -49,7 +57,7 @@ const getLongRoomId = async (shortRoomId: number) => {
   return roomId
 }
 
-const getDanmakuConfig = async (roomId: number) => {
+const getDanmakuConfig = async (roomId: number, signal: AbortSignal) => {
   const query = new URLSearchParams({
     room_id: String(roomId),
     platform: 'pc',
@@ -57,6 +65,7 @@ const getDanmakuConfig = async (roomId: number) => {
   })
   const response = await getJson<BilibiliResponse<DanmakuConfigData>>(
     `https://api.live.bilibili.com/room/v1/Danmu/getConf?${query}`,
+    signal,
   )
   const data = requireData(response, '获取弹幕服务器配置')
   if (!data.token || !data.host_server_list?.length) {
@@ -65,9 +74,11 @@ const getDanmakuConfig = async (roomId: number) => {
   return data
 }
 
-export const resolveObserverConfig = async (): Promise<DanmakuObserverConfig> => {
-  const roomId = await getLongRoomId(getShortRoomId())
-  const { token: key, host_server_list: hosts } = await getDanmakuConfig(roomId)
+export const resolveObserverConfig = async (
+  signal: AbortSignal,
+): Promise<DanmakuObserverConfig> => {
+  const roomId = await getLongRoomId(getShortRoomId(), signal)
+  const { token: key, host_server_list: hosts } = await getDanmakuConfig(roomId, signal)
   const [{ host, wss_port: wssPort }] = hosts
   if (!host || !wssPort) {
     throw new Error('获取弹幕服务器配置失败: host 无效')

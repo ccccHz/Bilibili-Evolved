@@ -1,4 +1,12 @@
-export type DiagnosticObserverStatus = 'inactive' | 'starting' | 'connecting' | 'ready' | 'error'
+export type DiagnosticObserverStatus =
+  | 'inactive'
+  | 'starting'
+  | 'connecting'
+  | 'ready'
+  | 'retrying'
+  | 'closing'
+  | 'closed'
+  | 'error'
 
 export type SendWindowState = 'manual' | 'fixed-experience'
 

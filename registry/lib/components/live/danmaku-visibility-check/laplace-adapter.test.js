@@ -62,12 +62,12 @@ const config = {
   address: 'wss://example.test/sub',
 }
 
-const setup = () => {
+const setup = timeouts => {
   let socket = null
   const observer = new LaplaceDanmakuObserver(() => {
     socket = new FakeWebSocket()
     return socket
-  })
+  }, timeouts)
   const getSocket = () => {
     assert.ok(socket)
     return socket
@@ -115,4 +115,39 @@ test('stays closed when stopped before authentication completes', async () => {
   await assert.rejects(connecting, /就绪前关闭/)
   assert.equal(observer.status, 'closed')
   assert.equal(socket.closeCalls, 1)
+})
+
+test('a silent room remains healthy with heartbeats and a half-open socket expires', async t => {
+  t.mock.timers.enable({ apis: ['setTimeout', 'Date'], now: 1000 })
+  const { observer, getSocket } = setup()
+  t.after(() => observer.close())
+  const connecting = observer.connect(config)
+  const socket = getSocket()
+  socket.open()
+  socket.receive(authReply(0))
+  await new Promise(resolve => setImmediate(resolve))
+  socket.receive(heartbeatReply(1))
+  await connecting
+  for (let index = 0; index < 5; index += 1) {
+    t.mock.timers.tick(30000)
+    socket.receive(heartbeatReply(1))
+    await new Promise(resolve => setImmediate(resolve))
+    assert.equal(observer.status, 'ready')
+  }
+  assert.equal(observer.health.lastMessageAt, null)
+  t.mock.timers.tick(90001)
+  assert.equal(observer.status, 'error')
+  assert.equal(socket.closeCalls, 1)
+})
+
+test('a transport open or malformed authentication cannot produce ready', async () => {
+  const { observer, getSocket } = setup()
+  const connecting = observer.connect(config)
+  const socket = getSocket()
+  socket.open()
+  assert.equal(observer.health.transportOpen, true)
+  assert.equal(observer.health.authenticated, false)
+  socket.receive(packet(8, textEncoder.encode('invalid')))
+  await assert.rejects(connecting, /鉴权失败/)
+  assert.equal(observer.status, 'error')
 })

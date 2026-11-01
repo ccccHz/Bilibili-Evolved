@@ -2,6 +2,7 @@ import { defineComponentMetadata } from '@/components/define'
 import { addStyle, removeStyle } from '@/core/style'
 import { Toast } from '@/core/toast'
 import { liveUrls } from '@/core/utils/urls'
+import { Bounds, clipFrozenDanmaku, placeToolbar } from './geometry'
 import componentStyle from './danmaku-hover-actions.scss'
 
 const componentName = 'liveDanmakuHoverActions'
@@ -25,10 +26,10 @@ let frozenDanmaku: HTMLElement | null = null
 let activeChatItem: HTMLElement | null = null
 let activeContent = ''
 let closeTimer = 0
-let positionFrame = 0
 let hoverClientX = 0
 let targetTop = 0
 let targetBottom = 0
+let playerBounds: Bounds | null = null
 let removeEventListeners: (() => void) | null = null
 
 const isVisible = (element: HTMLElement) => {
@@ -141,16 +142,8 @@ const clearCloseTimer = () => {
   }
 }
 
-const stopPositionLoop = () => {
-  if (positionFrame) {
-    cancelAnimationFrame(positionFrame)
-    positionFrame = 0
-  }
-}
-
 const hideToolbar = () => {
   clearCloseTimer()
-  stopPositionLoop()
   activeDanmaku?.classList.remove('be-live-danmaku-action-target', 'be-live-danmaku-action-source')
   frozenDanmaku?.remove()
   activeDanmaku = null
@@ -160,6 +153,7 @@ const hideToolbar = () => {
   hoverClientX = 0
   targetTop = 0
   targetBottom = 0
+  playerBounds = null
   toolbar?.classList.remove('be-live-danmaku-actions-visible')
 }
 
@@ -174,20 +168,19 @@ const positionToolbar = () => {
     return
   }
   const toolbarRect = toolbar.getBoundingClientRect()
-  const gap = 8
-  const margin = 8
-  const left = Math.min(
-    Math.max(hoverClientX - toolbarRect.width / 2, margin),
-    window.innerWidth - toolbarRect.width - margin,
+  if (!playerBounds) {
+    hideToolbar()
+    return
+  }
+  const { left, top } = placeToolbar(
+    hoverClientX,
+    { left: 0, right: 0, top: targetTop, bottom: targetBottom },
+    playerBounds,
+    toolbarRect.width,
+    toolbarRect.height,
   )
-  const preferredTop = targetBottom + gap
-  const top =
-    preferredTop + toolbarRect.height <= window.innerHeight - margin
-      ? preferredTop
-      : Math.max(margin, targetTop - toolbarRect.height - gap)
   toolbar.style.left = `${Math.round(left)}px`
   toolbar.style.top = `${Math.round(top)}px`
-  positionFrame = requestAnimationFrame(positionToolbar)
 }
 
 const createActionButton = (label: string, action: () => void | Promise<void>) => {
@@ -204,9 +197,39 @@ const createActionButton = (label: string, action: () => void | Promise<void>) =
 
 const createFrozenDanmaku = (danmaku: HTMLElement) => {
   const rect = danmaku.getBoundingClientRect()
+  const layer = danmaku.closest('.web-player-danmaku')
+  if (!layer) {
+    return null
+  }
+  const bounds = layer.getBoundingClientRect()
+  playerBounds = {
+    left: Math.max(0, bounds.left),
+    top: Math.max(0, bounds.top),
+    right: Math.min(window.innerWidth, bounds.right),
+    bottom: Math.min(window.innerHeight, bounds.bottom),
+  }
+  const computed = getComputedStyle(danmaku)
   const snapshot = danmaku.cloneNode(true) as HTMLElement
-  snapshot.classList.remove('be-live-danmaku-action-target', 'be-live-danmaku-action-source')
-  snapshot.classList.add('be-live-danmaku-action-snapshot')
+  // Renderer classes encode top/bottom alignment and depend on player ancestry.
+  // Preserve the rendered typography, not those positioning rules.
+  snapshot.className = 'bili-danmaku-x-dm be-live-danmaku-action-snapshot'
+  for (const property of [
+    'font',
+    'line-height',
+    'color',
+    'text-shadow',
+    'letter-spacing',
+    'opacity',
+    'text-decoration',
+    'direction',
+  ]) {
+    snapshot.style.setProperty(property, computed.getPropertyValue(property), 'important')
+  }
+  snapshot.style.setProperty('clip-path', clipFrozenDanmaku(rect, playerBounds), 'important')
+  snapshot.style.setProperty('right', 'auto', 'important')
+  snapshot.style.setProperty('bottom', 'auto', 'important')
+  snapshot.style.setProperty('box-sizing', 'border-box', 'important')
+  snapshot.style.setProperty('padding', '0', 'important')
   snapshot.removeAttribute('aria-live')
   snapshot.setAttribute('aria-label', `已暂停的弹幕: ${activeContent}`)
   snapshot.style.setProperty('position', 'fixed', 'important')
@@ -231,13 +254,17 @@ const createFrozenDanmaku = (danmaku: HTMLElement) => {
     scheduleClose()
   })
   frozenDanmaku = snapshot
-  document.body.appendChild(snapshot)
+  ;(document.fullscreenElement || document.body).appendChild(snapshot)
   danmaku.classList.add('be-live-danmaku-action-source')
   return { snapshot, rect }
 }
 
 const ensureToolbar = () => {
   if (toolbar) {
+    const host = document.fullscreenElement || document.body
+    if (toolbar.parentElement !== host) {
+      host.appendChild(toolbar)
+    }
     return toolbar
   }
   toolbar = document.createElement('div')
@@ -267,7 +294,7 @@ const ensureToolbar = () => {
   toolbar.append(repeatButton, replyButton, copyButton)
   toolbar.addEventListener('pointerenter', clearCloseTimer)
   toolbar.addEventListener('pointerleave', scheduleClose)
-  document.body.appendChild(toolbar)
+  ;(document.fullscreenElement || document.body).appendChild(toolbar)
   return toolbar
 }
 
@@ -279,10 +306,15 @@ const showToolbar = (danmaku: HTMLElement, clientX: number) => {
   hoverClientX = clientX
   activeDanmaku?.classList.remove('be-live-danmaku-action-target', 'be-live-danmaku-action-source')
   activeDanmaku = danmaku
-  activeDanmaku.classList.add('be-live-danmaku-action-target')
   activeContent = danmaku.textContent?.trim() || ''
   frozenDanmaku?.remove()
-  const { snapshot, rect } = createFrozenDanmaku(activeDanmaku)
+  const frozen = createFrozenDanmaku(activeDanmaku)
+  if (!frozen) {
+    hideToolbar()
+    return
+  }
+  const { snapshot, rect } = frozen
+  activeDanmaku.classList.add('be-live-danmaku-action-target')
   frozenDanmaku = snapshot
   targetTop = rect.top
   targetBottom = rect.bottom
@@ -293,7 +325,6 @@ const showToolbar = (danmaku: HTMLElement, clientX: number) => {
   replyButton.hidden = !username
   replyButton.title = username ? `回复 @${username}` : ''
   currentToolbar.classList.add('be-live-danmaku-actions-visible')
-  stopPositionLoop()
   positionToolbar()
 }
 
@@ -334,7 +365,13 @@ const load = () => {
   }
   document.addEventListener('pointerover', onPointerOver, true)
   document.addEventListener('pointerout', onPointerOut, true)
+  window.addEventListener('scroll', hideToolbar, true)
+  window.addEventListener('resize', hideToolbar)
+  document.addEventListener('fullscreenchange', hideToolbar)
   removeEventListeners = () => {
+    window.removeEventListener('scroll', hideToolbar, true)
+    window.removeEventListener('resize', hideToolbar)
+    document.removeEventListener('fullscreenchange', hideToolbar)
     document.removeEventListener('pointerover', onPointerOver, true)
     document.removeEventListener('pointerout', onPointerOut, true)
   }

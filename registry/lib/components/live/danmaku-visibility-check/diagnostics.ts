@@ -452,6 +452,19 @@ export class DanmakuDiagnostics {
     }
   }
 
+  cancelPendingObservation() {
+    const hadPending = this.pendingSends.length > 0
+    this.pendingSends.forEach(pending => {
+      clearTimeout(pending.alertTimeout)
+      clearTimeout(pending.cleanupTimeout)
+    })
+    this.pendingSends = []
+    this.observerArrivals.clear()
+    this.pageArrivals.clear()
+    this.emitUpdate()
+    return hadPending
+  }
+
   stop() {
     if (this.timer) {
       clearInterval(this.timer)
