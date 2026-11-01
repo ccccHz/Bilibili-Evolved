@@ -5,18 +5,21 @@ import {
   removeComponentListener,
 } from '@/core/settings'
 import { select } from '@/core/spin-query'
-import { addStyle, removeStyle } from '@/core/style'
+import { addStyle } from '@/core/style'
 import { Toast } from '@/core/toast'
 import { getUserInfo } from '@/core/user-info'
 import { getUID, mountVueComponent } from '@/core/utils'
 import { liveUrls } from '@/core/utils/urls'
 import { DanmakuDiagnostics } from './diagnostics'
-import { resetDiagnosticViewState, updateDiagnosticViewState } from './diagnostic-store'
+import {
+  resetDiagnosticViewState,
+  setObserverRetryHandler,
+  updateDiagnosticViewState,
+} from './diagnostic-store'
 import { markFailureObservedLate, recordSuspectedFailure } from './failure-history'
 import { closeVisibilityHistoryManager } from './history-manager-store'
 import { ObserverRecovery, RecoveryStatus } from './observer-recovery'
 import { mountInputStatus } from './input-status'
-import inputStatusStyle from './input-status.scss'
 import { recordVisibilityMeasurement } from './measurement-history'
 import { DanmakuVisibilityCheckOptions, danmakuVisibilityCheckOptions } from './options'
 import { resolveObserverConfig } from './room-config'
@@ -118,7 +121,7 @@ const cleanup = () => {
   removeObserverListeners = null
   disposeInputStatus?.()
   disposeInputStatus = null
-  removeStyle(`${componentName}-input-status`)
+  setObserverRetryHandler(null)
   diagnostics?.stop()
   diagnostics = null
   observer?.close()
@@ -308,12 +311,12 @@ const load = async (settings: { options: DanmakuVisibilityCheckOptions }) => {
     nextObserver.removeEventListener('status', onStatus)
   }
   observer = nextObserver
+  setObserverRetryHandler(() => nextObserver.retry())
   diagnostics = nextDiagnostics
   addComponentListener(`${componentName}.sendMatchTimeoutMs`, refreshDiagnosticsWindow)
   nextDiagnostics.start()
 
   try {
-    addStyle(inputStatusStyle, `${componentName}-input-status`)
     disposeInputStatus = mountInputStatus(nextObserver, () => settings.options.showChatSpeed)
     const { chatHistory } = sendContext
     const getOriginalContent = () =>

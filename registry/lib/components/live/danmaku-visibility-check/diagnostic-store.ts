@@ -69,6 +69,13 @@ export const initialDiagnosticViewState: DanmakuDiagnosticViewState = {
 
 let state = { ...initialDiagnosticViewState }
 const listeners = new Set<(value: DanmakuDiagnosticViewState) => void>()
+let observerRetryHandler: (() => void) | null = null
+
+export const setObserverRetryHandler = (handler: (() => void) | null) => {
+  observerRetryHandler = handler
+}
+
+export const retryObserverConnection = () => observerRetryHandler?.()
 
 export const getDiagnosticViewState = () => state
 

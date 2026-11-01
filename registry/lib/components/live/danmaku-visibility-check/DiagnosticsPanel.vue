@@ -5,6 +5,14 @@
       <span>观察连接</span>
       <span :class="['status', `status-${state.observerStatus}`]">{{ observerStatusText }}</span>
     </div>
+    <button
+      v-if="['error', 'retrying', 'closed'].includes(state.observerStatus)"
+      class="retry-observer"
+      type="button"
+      @click="retryObserver"
+    >
+      重新连接观察
+    </button>
     <div class="metric-grid">
       <span>当前生效窗口</span><strong>{{ formatMs(state.effectiveWindowMs) }}</strong>
       <span>窗口来源</span><strong>{{ windowStateText }}</strong> <span>发送匹配</span
@@ -62,6 +70,7 @@ import { defineComponent } from 'vue'
 import {
   DanmakuDiagnosticViewState,
   getDiagnosticViewState,
+  retryObserverConnection,
   subscribeDiagnosticViewState,
 } from './diagnostic-store'
 import {
@@ -157,6 +166,7 @@ export default defineComponent({
     this.unsubscribeMeasurements?.()
   },
   methods: {
+    retryObserver: retryObserverConnection,
     formatMs(value: number | null) {
       return value === null ? '--' : `${value}ms`
     },
@@ -255,7 +265,8 @@ export default defineComponent({
     font-family: monospace;
   }
 
-  .open-history {
+  .open-history,
+  .retry-observer {
     width: 100%;
     margin-top: 10px;
     padding: 6px 8px;
