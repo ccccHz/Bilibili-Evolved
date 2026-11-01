@@ -2,7 +2,6 @@ import { ObserverRecovery } from './observer-recovery'
 
 interface OwnedInput {
   badge: HTMLButtonElement
-  row: Element | null
 }
 
 const inputSelector = 'textarea.chat-input, .danmaku-send-bar input'
@@ -46,15 +45,8 @@ export class ChatSpeedWindow {
 export const mountInputStatus = (observer: ObserverRecovery, speedEnabled: () => boolean) => {
   const speed = new ChatSpeedWindow()
   const owned = new Map<HTMLInputElement | HTMLTextAreaElement, OwnedInput>()
-  const releaseRow = (item: OwnedInput) => {
-    if (!item.row?.querySelector('.be-live-observer-status')) {
-      item.row?.classList.remove('be-live-observer-row')
-    }
-    item.row = null
-  }
   const removeBadge = (item: OwnedInput) => {
     item.badge.remove()
-    releaseRow(item)
   }
   const refresh = () => {
     owned.forEach((item, input) => {
@@ -75,7 +67,7 @@ export const mountInputStatus = (observer: ObserverRecovery, speedEnabled: () =>
           badge.type = 'button'
           badge.className = 'be-live-observer-status'
           badge.addEventListener('click', () => observer.retry())
-          item = { badge, row: null }
+          item = { badge }
           owned.set(input, item)
         }
         const { badge } = item
@@ -84,13 +76,10 @@ export const mountInputStatus = (observer: ObserverRecovery, speedEnabled: () =>
         const host = customSendbar || row
         if (host && badge.parentElement !== host) {
           badge.remove()
-          releaseRow(item)
           if (customSendbar) {
             customSendbar.appendChild(badge)
           } else {
             row.insertBefore(badge, row.querySelector('.icon-right-part'))
-            row.classList.add('be-live-observer-row')
-            item.row = row
           }
         } else if (!host && !badge.isConnected) {
           const container = input.closest('.chat-input-ctnr') || input

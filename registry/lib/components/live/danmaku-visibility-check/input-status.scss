@@ -1,4 +1,6 @@
-.be-live-observer-row {
+// Vue can replace the platform row's class attribute during updates.
+// Tie layout to our own child instead of adding a class to that row.
+.control-panel-icon-row:has(> .be-live-observer-status) {
   display: flex !important;
   align-items: center;
   justify-content: space-between;
@@ -21,31 +23,35 @@
   flex: 0 1 auto;
   align-items: center;
   justify-content: center;
-  gap: 5px;
+  gap: 6px;
   min-width: 0;
   max-width: 100%;
   margin: 0;
-  padding: 2px 3px;
+  box-sizing: border-box;
+  height: 32px;
+  padding: 0 4px;
   border: 0;
   border-radius: 4px;
   background: transparent;
-  color: inherit;
-  font: 11px/20px sans-serif;
+  color: #c9ccd0;
+  font-family: inherit;
+  font-size: 14px;
+  line-height: 24px;
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
   cursor: pointer;
 
   &::before {
     content: '';
-    flex: 0 0 5px;
-    width: 5px;
-    height: 5px;
+    flex: 0 0 6px;
+    width: 6px;
+    height: 6px;
     border-radius: 50%;
     background: var(--observer-color);
   }
 
   &:disabled {
-    opacity: 0.85;
+    opacity: 1;
     cursor: default;
   }
 
@@ -66,5 +72,8 @@
 
 .danmaku-send-bar .be-live-observer-status {
   flex: 0 0 auto;
+  height: 24px;
   margin: 0 4px;
+  font-size: 12px;
+  line-height: 20px;
 }
