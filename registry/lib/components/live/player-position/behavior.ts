@@ -17,13 +17,15 @@ export const findWebFullscreenControl = (player: Element): HTMLElement | null =>
   }
   // Verified on Room Player 3.11.9. The adjacent native-fullscreen icon has
   // a different path. Never fall back to an arbitrary control by index.
-  return (
-    Array.from(player.querySelectorAll<HTMLElement>('.right-area > .tip-wrap')).find(control =>
-      Array.from(control.querySelectorAll('svg path')).some(path =>
+  const control = Array.from(player.querySelectorAll<HTMLElement>('.right-area > .tip-wrap')).find(
+    wrapper =>
+      Array.from(wrapper.querySelectorAll('svg path')).some(path =>
         (path.getAttribute('d') || '').startsWith('M12 5C9.48178'),
       ),
-    ) || null
   )
+  // The wrapper only owns the tooltip. The click handler is on its child;
+  // clicking the wrapper programmatically does not reach that handler.
+  return control?.querySelector<HTMLElement>('.icon') || control || null
 }
 
 export const mountPlayerPosition = (
@@ -45,6 +47,7 @@ export const mountPlayerPosition = (
   let desiredMode: boolean | null = null
   let attempts = 0
   let modeAttempts = 0
+  let modeDeadline = 0
   let nextAttemptAt = 0
   let frame = 0
   let timer = 0
@@ -82,6 +85,7 @@ export const mountPlayerPosition = (
       stableMode = null
       attempts = 0
       modeAttempts = 0
+      modeDeadline = Date.now() + 15000
       nextAttemptAt = 0
       clearTimeout(timer)
       clearTimeout(modeTimer)
@@ -135,12 +139,23 @@ export const mountPlayerPosition = (
         ) {
           options.saveMode(stableMode)
         }
-      } else if (modeAttempts < 4) {
-        modeAttempts += 1
+      } else if (modeAttempts < 4 && Date.now() < modeDeadline) {
         const mounter = player.querySelector('.live-player-mounter') || player
-        mounter.dispatchEvent(new Event('mousemove', { bubbles: true }))
+        // The platform mounts its controls lazily, after a throttled mousemove.
+        // Missing controls must not consume the click budget before they exist.
+        const bounds = mounter.getBoundingClientRect()
+        mounter.dispatchEvent(
+          new MouseEvent('mousemove', {
+            bubbles: true,
+            clientX: bounds.left + bounds.width / 2,
+            clientY: bounds.top + bounds.height / 2,
+          }),
+        )
         const control = findWebFullscreenControl(player)
-        control?.click()
+        if (control) {
+          modeAttempts += 1
+          control.click()
+        }
       } else {
         restoreDone = true
         // Preserve the saved preference when this player cannot restore it.
@@ -150,7 +165,8 @@ export const mountPlayerPosition = (
     }
     if (!positionDone || !restoreDone) {
       nextAttemptAt =
-        Date.now() + [120, 450, 1000, 1800][Math.min(3, Math.max(attempts, modeAttempts) - 1)]
+        Date.now() +
+        [500, 500, 1000, 1800][Math.max(0, Math.min(3, Math.max(attempts, modeAttempts) - 1))]
       clearTimeout(timer)
       timer = window.setTimeout(queueScan, nextAttemptAt - Date.now())
     }

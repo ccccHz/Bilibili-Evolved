@@ -212,9 +212,14 @@ export default defineComponent({
   .status-row,
   .metric-grid {
     display: grid;
-    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr);
     gap: 3px 8px;
     align-items: baseline;
+
+    > :nth-child(even) {
+      text-align: right;
+      overflow-wrap: anywhere;
+    }
   }
 
   .status {
