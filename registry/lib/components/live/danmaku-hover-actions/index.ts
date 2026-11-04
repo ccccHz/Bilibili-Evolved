@@ -23,6 +23,7 @@ const closeDelay = 160
 let toolbar: HTMLDivElement | null = null
 let activeDanmaku: HTMLElement | null = null
 let frozenDanmaku: HTMLElement | null = null
+let activeLayer: Element | null = null
 let activeChatItem: HTMLElement | null = null
 let activeContent = ''
 let closeTimer = 0
@@ -148,6 +149,7 @@ const hideToolbar = () => {
   frozenDanmaku?.remove()
   activeDanmaku = null
   frozenDanmaku = null
+  activeLayer = null
   activeChatItem = null
   activeContent = ''
   hoverClientX = 0
@@ -201,6 +203,7 @@ const createFrozenDanmaku = (danmaku: HTMLElement) => {
   if (!layer) {
     return null
   }
+  activeLayer = layer
   const bounds = layer.getBoundingClientRect()
   playerBounds = {
     left: Math.max(0, bounds.left),
@@ -365,11 +368,22 @@ const load = () => {
   }
   document.addEventListener('pointerover', onPointerOver, true)
   document.addEventListener('pointerout', onPointerOut, true)
-  window.addEventListener('scroll', hideToolbar, true)
+  const onScroll = (event: Event) => {
+    // The chat history scrolls automatically as messages arrive. Only scrolling
+    // the document or a player ancestor invalidates the fixed snapshot's position.
+    if (
+      event.target === window ||
+      event.target === document ||
+      (event.target instanceof Element && activeLayer && event.target.contains(activeLayer))
+    ) {
+      hideToolbar()
+    }
+  }
+  window.addEventListener('scroll', onScroll, true)
   window.addEventListener('resize', hideToolbar)
   document.addEventListener('fullscreenchange', hideToolbar)
   removeEventListeners = () => {
-    window.removeEventListener('scroll', hideToolbar, true)
+    window.removeEventListener('scroll', onScroll, true)
     window.removeEventListener('resize', hideToolbar)
     document.removeEventListener('fullscreenchange', hideToolbar)
     document.removeEventListener('pointerover', onPointerOver, true)
