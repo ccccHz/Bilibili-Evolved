@@ -1,9 +1,10 @@
-/** Research runner only: not imported by the component and never starts itself. */
+/** Bounded execution; all account interaction is supplied by the native-button driver. */
 export interface LightingTrialState {
   roomId: number
   anchorId: number
   hasMedal: boolean
   lighted: boolean | null
+  live?: boolean
 }
 
 export interface LightingTrialDriver {
@@ -14,6 +15,8 @@ export interface LightingTrialDriver {
   /** Read from the native control before the trial; units are milliseconds. */
   cooldownMs: number
   reportMaxMs: number
+  maxClicks?: number
+  onClick?: (count: number) => void
   signal?: AbortSignal
 }
 
@@ -21,12 +24,16 @@ export interface LightingTrialDriver {
 export const runLightingTrial = async (driver: LightingTrialDriver) => {
   const roomId = driver.currentRoomId()
   let clicks = 0
+  const maxClicks = driver.maxClicks ?? 30
   const result = (status: string) => ({ status, clicks })
   const cancelled = () => driver.signal?.aborted || driver.currentRoomId() !== roomId
   if (!Number.isSafeInteger(roomId) || roomId <= 0 || cancelled()) {
     return result('cancelled')
   }
   if (
+    !Number.isInteger(maxClicks) ||
+    maxClicks < 1 ||
+    maxClicks > 30 ||
     !Number.isFinite(driver.cooldownMs) ||
     driver.cooldownMs < 0 ||
     driver.cooldownMs > 10000 ||
@@ -51,6 +58,9 @@ export const runLightingTrial = async (driver: LightingTrialDriver) => {
       if (!state.hasMedal) {
         return 'no-medal'
       }
+      if (state.live === false) {
+        return 'not-live'
+      }
       if (state.lighted === true) {
         return clicks ? 'lit' : 'already-lit'
       }
@@ -60,7 +70,7 @@ export const runLightingTrial = async (driver: LightingTrialDriver) => {
     if (initialStatus) {
       return result(initialStatus)
     }
-    while (clicks < 30) {
+    while (clicks < maxClicks) {
       if (clicks) {
         await driver.wait(Math.max(400, driver.cooldownMs + 50))
       }
@@ -69,6 +79,7 @@ export const runLightingTrial = async (driver: LightingTrialDriver) => {
       }
       await driver.clickNativeLike()
       clicks++
+      driver.onClick?.(clicks)
       if (clicks % 5 === 0) {
         const status = classify(await driver.readState())
         if (status) {

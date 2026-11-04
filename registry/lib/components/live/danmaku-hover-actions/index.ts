@@ -2,7 +2,9 @@ import { defineComponentMetadata } from '@/components/define'
 import { addStyle, removeStyle } from '@/core/style'
 import { Toast } from '@/core/toast'
 import { liveUrls } from '@/core/utils/urls'
+import { getComponentSettings } from '@/core/settings'
 import { Bounds, clipFrozenDanmaku, placeToolbar } from './geometry'
+import { createNativeHover } from './native'
 import componentStyle from './danmaku-hover-actions.scss'
 
 const componentName = 'liveDanmakuHoverActions'
@@ -32,6 +34,9 @@ let targetTop = 0
 let targetBottom = 0
 let playerBounds: Bounds | null = null
 let removeEventListeners: (() => void) | null = null
+let nativeHover: ReturnType<typeof createNativeHover> | null = null
+let releaseNative: (() => void) | null = null
+let activeObserver: MutationObserver | null = null
 
 const isVisible = (element: HTMLElement) => {
   const { width, height } = element.getBoundingClientRect()
@@ -145,6 +150,10 @@ const clearCloseTimer = () => {
 
 const hideToolbar = () => {
   clearCloseTimer()
+  activeObserver?.disconnect()
+  activeObserver = null
+  releaseNative?.()
+  releaseNative = null
   activeDanmaku?.classList.remove('be-live-danmaku-action-target', 'be-live-danmaku-action-source')
   frozenDanmaku?.remove()
   activeDanmaku = null
@@ -165,7 +174,7 @@ const scheduleClose = () => {
 }
 
 const positionToolbar = () => {
-  if (!toolbar || !frozenDanmaku?.isConnected) {
+  if (!toolbar || !(frozenDanmaku || activeDanmaku)?.isConnected) {
     hideToolbar()
     return
   }
@@ -306,19 +315,43 @@ const showToolbar = (danmaku: HTMLElement, clientX: number) => {
   if (activeDanmaku === danmaku) {
     return
   }
+  hideToolbar()
   hoverClientX = clientX
-  activeDanmaku?.classList.remove('be-live-danmaku-action-target', 'be-live-danmaku-action-source')
   activeDanmaku = danmaku
   activeContent = danmaku.textContent?.trim() || ''
-  frozenDanmaku?.remove()
-  const frozen = createFrozenDanmaku(activeDanmaku)
-  if (!frozen) {
+  const layer = danmaku.closest('.web-player-danmaku')
+  if (!layer) {
     hideToolbar()
     return
   }
-  const { snapshot, rect } = frozen
+  const bounds = layer.getBoundingClientRect()
+  activeLayer = layer
+  playerBounds = {
+    left: Math.max(0, bounds.left),
+    top: Math.max(0, bounds.top),
+    right: Math.min(window.innerWidth, bounds.right),
+    bottom: Math.min(window.innerHeight, bounds.bottom),
+  }
+  let rect = danmaku.getBoundingClientRect()
+  if (getComponentSettings<{ nativeHover: boolean }>(componentName).options.nativeHover) {
+    releaseNative = nativeHover?.pause(danmaku) || null
+  }
+  if (!releaseNative) {
+    const frozen = createFrozenDanmaku(danmaku)
+    if (!frozen) {
+      hideToolbar()
+      return
+    }
+    rect = frozen.rect
+  }
   activeDanmaku.classList.add('be-live-danmaku-action-target')
-  frozenDanmaku = snapshot
+  activeObserver = new MutationObserver(() => {
+    if (!danmaku.isConnected || !danmaku.classList.contains('be-live-danmaku-action-target')) {
+      hideToolbar()
+    }
+  })
+  activeObserver.observe(danmaku, { attributes: true, attributeFilter: ['class'] })
+  activeObserver.observe(document.body, { childList: true, subtree: true })
   targetTop = rect.top
   targetBottom = rect.bottom
   activeChatItem = findLatestChatItem(activeContent) || null
@@ -336,6 +369,7 @@ const load = () => {
     return
   }
   addStyle(componentStyle, componentName)
+  nativeHover = createNativeHover(unsafeWindow)
   const onPointerOver = (event: PointerEvent) => {
     const { target } = event
     if (!(target instanceof Element)) {
@@ -381,10 +415,19 @@ const load = () => {
   }
   window.addEventListener('scroll', onScroll, true)
   window.addEventListener('resize', hideToolbar)
+  const onVisibilityChange = () => {
+    if (document.hidden) {
+      hideToolbar()
+    }
+  }
+  document.addEventListener('visibilitychange', onVisibilityChange)
+  window.addEventListener('pagehide', hideToolbar)
   document.addEventListener('fullscreenchange', hideToolbar)
   removeEventListeners = () => {
     window.removeEventListener('scroll', onScroll, true)
     window.removeEventListener('resize', hideToolbar)
+    document.removeEventListener('visibilitychange', onVisibilityChange)
+    window.removeEventListener('pagehide', hideToolbar)
     document.removeEventListener('fullscreenchange', hideToolbar)
     document.removeEventListener('pointerover', onPointerOver, true)
     document.removeEventListener('pointerout', onPointerOut, true)
@@ -395,6 +438,8 @@ const unload = () => {
   removeEventListeners?.()
   removeEventListeners = null
   hideToolbar()
+  nativeHover?.dispose()
+  nativeHover = null
   toolbar?.remove()
   toolbar = null
   removeStyle(componentName)
@@ -408,6 +453,9 @@ export const component = defineComponentMetadata({
     link: 'https://github.com/ccccHz',
   },
   tags: [componentsTags.live],
+  options: {
+    nativeHover: { displayName: '优先原生悬停，移开后继续飘屏', defaultValue: true },
+  },
   entry: load,
   reload: load,
   unload,

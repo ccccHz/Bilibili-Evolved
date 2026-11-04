@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { runLightingTrial } from './lighting-trial'
+import { runLightingTrial } from './runner'
 
 const fixture = (change = {}) => {
   const state = { roomId: 7, anchorId: 9, hasMedal: true, lighted: false, ...change }
@@ -18,7 +18,7 @@ const fixture = (change = {}) => {
 }
 
 test('does not click for a lit, absent, unknown, or unrelated medal', async () => {
-  for (const change of [{ lighted: true }, { hasMedal: false }, { lighted: null }, { roomId: 8 }, { anchorId: 0 }]) {
+  for (const change of [{ lighted: true }, { hasMedal: false }, { lighted: null }, { roomId: 8 }, { anchorId: 0 }, { live: false }]) {
     const f = fixture(change)
     await runLightingTrial(f.driver)
     assert.equal(f.clicks(), 0)
@@ -36,6 +36,15 @@ test('stops when a fresh read confirms lighting', async () => {
   const f = fixture()
   f.driver.readState = async () => ({ ...f.state, lighted: f.clicks() >= 5 })
   assert.deepEqual(await runLightingTrial(f.driver), { status: 'lit', clicks: 5 })
+})
+
+test('uses the remaining task count and rejects an expanded click budget', async () => {
+  const f = fixture()
+  f.driver.maxClicks = 18
+  assert.equal((await runLightingTrial(f.driver)).clicks, 18)
+  f.driver.maxClicks = 300
+  assert.equal((await runLightingTrial(f.driver)).status, 'invalid-timing')
+  assert.equal(f.clicks(), 18)
 })
 
 test('stops on navigation, cancellation, identity changes, and request failures', async () => {
