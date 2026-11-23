@@ -1,7 +1,7 @@
 import { reactive } from 'vue'
 
 export const lightingState = reactive({
-  message: '等待当前直播间',
+  message: '组件未开启',
   clicks: 0,
   total: 0,
   busy: false,

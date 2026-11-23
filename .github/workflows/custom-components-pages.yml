@@ -9,6 +9,7 @@ on:
       - .github/workflows/custom-components-pages.yml
       - custom-registry/**
       - registry/lib/components/live/autoResolution/**
+      - registry/lib/components/live/auto-light-medal/**
       - registry/lib/components/live/danmaku-hover-actions/**
       - registry/lib/components/live/danmaku-send-history/**
       - registry/lib/components/live/danmaku-visibility-check/**
@@ -30,6 +31,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
       - name: Setup Node.js
@@ -46,7 +49,7 @@ jobs:
       - name: Check publisher types
         run: pnpm exec tsc -p custom-registry/tsconfig.json --noEmit
       - name: Test custom live components
-        run: pnpm exec tsx --test registry/lib/components/live/danmaku-visibility-check/*.test.js registry/lib/components/live/danmaku-hover-actions/*.test.js registry/lib/components/live/player-position/*.test.js
+        run: pnpm exec tsx --test registry/lib/components/live/danmaku-visibility-check/*.test.js registry/lib/components/live/danmaku-hover-actions/*.test.js registry/lib/components/live/player-position/*.test.js registry/lib/components/live/auto-light-medal/*.test.js
       - name: Build custom component site
         run: pnpm tsx custom-registry/build.ts
       - name: Publish GitHub Raw artifacts

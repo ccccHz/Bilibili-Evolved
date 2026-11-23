@@ -2,13 +2,20 @@ export interface PublishedComponent {
   id: string
   displayName: string
   description: string
+  sourceRevision?: string
 }
 
 export const publishedComponents: PublishedComponent[] = [
   {
     id: 'live/danmaku-hover-actions',
+    sourceRevision: '52e2588e01ebdc8ba9062cd7bcde19fec089d7bc',
     displayName: '直播弹幕悬停操作',
     description: '悬停冻结直播飘屏弹幕，并提供 +1、@回复和复制操作.',
+  },
+  {
+    id: 'live/auto-light-medal',
+    displayName: '当前房间自动点亮粉丝牌',
+    description: '进入直播间后，通过免费点赞任务恢复熄灭的粉丝牌；不会赠礼或发送弹幕。默认关闭。',
   },
   {
     id: 'live/danmaku-visibility-check',

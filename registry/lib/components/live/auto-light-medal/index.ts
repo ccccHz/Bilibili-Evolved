@@ -86,7 +86,7 @@ const load = async () => {
         return
       }
       if (!navigator.locks) {
-        update('浏览器不支持跨页协调，未执行点赞')
+        update('当前浏览器无法防止多个页面重复点赞，已跳过')
         return
       }
       await navigator.locks.request(

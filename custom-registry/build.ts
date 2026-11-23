@@ -1,6 +1,6 @@
 import { execFileSync } from 'child_process'
 import { createHash } from 'crypto'
-import { mkdir, readFile, rm, writeFile } from 'fs/promises'
+import { mkdir, mkdtemp, readFile, rm, writeFile } from 'fs/promises'
 import path from 'path'
 import webpack, { Configuration, MultiStats, Stats } from 'webpack'
 import { buildByEntry } from '../registry/webpack/config'
@@ -45,12 +45,15 @@ const removeCdnSourceMapPlugin = (config: Configuration) => {
   )
 }
 
-const createWebpackConfig = (id: string) => {
+const createWebpackConfig = (id: string, entry?: string) => {
   const config = buildByEntry({
     src: './registry/lib/components/',
     type: 'component',
     entry: `./registry/lib/components/${id}/index.ts`,
   })
+  if (entry) {
+    config.entry = { [id]: entry }
+  }
   removeCdnSourceMapPlugin(config)
   config.devtool = 'source-map'
   config.output = {
@@ -199,7 +202,30 @@ const renderIndex = (revision: string, artifacts: PublishedArtifact[]) => {
 const main = async () => {
   await rm(outputRoot, { recursive: true, force: true })
   await mkdir(componentsOutput, { recursive: true })
-  const stats = await compile(publishedComponents.map(item => createWebpackConfig(item.id)))
+  // Keep unapproved development changes out of independent component releases.
+  // Pinned components are rebuilt from committed source, never copied from dist.
+  const snapshots: string[] = []
+  let stats: Stats | MultiStats
+  try {
+    const configs: Configuration[] = []
+    for (const item of publishedComponents) {
+      let entry: string | undefined
+      if (item.sourceRevision) {
+        const snapshot = await mkdtemp(path.join(repositoryRoot, 'registry/lib/.publish-'))
+        snapshots.push(snapshot)
+        const sourcePath = `registry/lib/components/${item.id}`
+        const archive = execFileSync('git', ['archive', item.sourceRevision, sourcePath], {
+          cwd: repositoryRoot,
+        })
+        execFileSync('tar', ['-x', '-C', snapshot], { input: new Uint8Array(archive) })
+        entry = path.join(snapshot, sourcePath, 'index.ts')
+      }
+      configs.push(createWebpackConfig(item.id, entry))
+    }
+    stats = await compile(configs)
+  } finally {
+    await Promise.all(snapshots.map(snapshot => rm(snapshot, { recursive: true, force: true })))
+  }
   console.log(
     stats.toString({
       all: false,

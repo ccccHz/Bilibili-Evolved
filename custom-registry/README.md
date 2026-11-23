@@ -6,6 +6,7 @@ registry 全局依赖或 Webpack 配置.
 当前发布:
 
 - `live/danmaku-hover-actions`
+- `live/auto-light-medal`（默认关闭；免费点赞点亮当前房间熄灭的粉丝牌）
 - `live/danmaku-visibility-check`
 - `live/player-position`（默认关闭，安装后按需开启）
 - `live/danmaku-send-history`
@@ -13,6 +14,9 @@ registry 全局依赖或 Webpack 配置.
 - `live/liveData-reAdd`
 
 `feeds/mine-test` 是早期测试组件, 不参与发布.
+
+悬停组件的原生续播仍待单独验收，发布配置用 `sourceRevision` 固定到现有正式源码。
+构建器会从 Git 中提取该版本源码重新构建，不影响主线中的开发实现。
 
 ## 本地构建
 
