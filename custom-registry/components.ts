@@ -8,7 +8,7 @@ export interface PublishedComponent {
 export const publishedComponents: PublishedComponent[] = [
   {
     id: 'live/danmaku-hover-actions',
-    sourceRevision: '52e2588e01ebdc8ba9062cd7bcde19fec089d7bc',
+    sourceRevision: '9f9c492f8110013376d14472cf4b563421ccb8d7',
     displayName: '直播弹幕悬停操作',
     description: '悬停冻结直播飘屏弹幕，并提供 +1、@回复和复制操作.',
   },
