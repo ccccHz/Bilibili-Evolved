@@ -1,0 +1,70 @@
+{
+  "schemaVersion": 1,
+  "revision": "77b39b380d2f",
+  "components": [
+    {
+      "id": "live/danmaku-hover-actions",
+      "sourceRevision": "9f9c492f8110013376d14472cf4b563421ccb8d7",
+      "displayName": "直播弹幕悬停操作",
+      "description": "悬停冻结直播飘屏弹幕，并提供 +1、@回复和复制操作.",
+      "path": "components/live/danmaku-hover-actions.js",
+      "installUrl": "https://raw.githubusercontent.com/ccccHz/Bilibili-Evolved/custom-dist/components/live/danmaku-hover-actions.js",
+      "bytes": 15730,
+      "sha256": "0edcf178b7d5ad87a45dedbdc542128072c930f08eedd3fd20a9fb2dfeaf011e"
+    },
+    {
+      "id": "live/auto-light-medal",
+      "displayName": "当前房间自动点亮粉丝牌",
+      "description": "进入直播间后，通过免费点赞任务恢复熄灭的粉丝牌；不会赠礼或发送弹幕。默认关闭。",
+      "path": "components/live/auto-light-medal.js",
+      "installUrl": "https://raw.githubusercontent.com/ccccHz/Bilibili-Evolved/custom-dist/components/live/auto-light-medal.js",
+      "bytes": 17854,
+      "sha256": "d759b3486c17c107929f0fce32e80a56f97fb0fe06305c70d34433b97197fbf3"
+    },
+    {
+      "id": "live/danmaku-visibility-check",
+      "displayName": "直播弹幕公开可见性检测",
+      "description": "通过独立弹幕流检查本地发送的弹幕是否可能被屏蔽.",
+      "path": "components/live/danmaku-visibility-check.js",
+      "installUrl": "https://raw.githubusercontent.com/ccccHz/Bilibili-Evolved/custom-dist/components/live/danmaku-visibility-check.js",
+      "bytes": 236637,
+      "sha256": "b55d58cd2b9541ddf6624704003161da149edc0ea5e3df469f4847173e33a30d"
+    },
+    {
+      "id": "live/player-position",
+      "displayName": "直播播放器定位与网页全屏记忆",
+      "description": "记住网页全屏状态，刷新后恢复；播放器不可充分见时有界定位，手动滚动后停止.",
+      "path": "components/live/player-position.js",
+      "installUrl": "https://raw.githubusercontent.com/ccccHz/Bilibili-Evolved/custom-dist/components/live/player-position.js",
+      "bytes": 7023,
+      "sha256": "6d30a6d670fba5596a288d0237794b0511bb9f04638ba209b4bb4269cd092710"
+    },
+    {
+      "id": "live/danmaku-send-history",
+      "displayName": "直播弹幕发送历史",
+      "description": "使用上下方向键切换当前直播间发送过的弹幕.",
+      "path": "components/live/danmaku-send-history.js",
+      "installUrl": "https://raw.githubusercontent.com/ccccHz/Bilibili-Evolved/custom-dist/components/live/danmaku-send-history.js",
+      "bytes": 5152,
+      "sha256": "f99aca6469b0ef7979bbb50f8ea676b65e24658d405faa8918d7b3ca761cc486"
+    },
+    {
+      "id": "live/autoResolution",
+      "displayName": "直播自动高分辨率",
+      "description": "进入直播间后自动切换到可用的最高分辨率.",
+      "path": "components/live/autoResolution.js",
+      "installUrl": "https://raw.githubusercontent.com/ccccHz/Bilibili-Evolved/custom-dist/components/live/autoResolution.js",
+      "bytes": 2290,
+      "sha256": "3f952e3686d088acca2ea85b296407a924042d62c22899559e4de8aace7e244f"
+    },
+    {
+      "id": "live/liveData-reAdd",
+      "displayName": "当前观众数和舰长数显示",
+      "description": "在直播控制栏恢复当前观众数和舰长数显示.",
+      "path": "components/live/liveData-reAdd.js",
+      "installUrl": "https://raw.githubusercontent.com/ccccHz/Bilibili-Evolved/custom-dist/components/live/liveData-reAdd.js",
+      "bytes": 10839,
+      "sha256": "1d43a7c883cec7b98402c1cd318e132e122259685eda82450646df6167ad52d5"
+    }
+  ]
+}
