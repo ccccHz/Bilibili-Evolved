@@ -16,8 +16,9 @@ const inputSelector = [
   '.control-panel-ctnr input.chat-input',
 ].join(', ')
 const sendButtonSelector = [
-  '.control-panel-ctnr .bottom-actions .bl-button--primary',
-  '.control-panel-ctnr button.send-btn',
+  '.chat-input-ctnr .send-btn-wrapper',
+  '.bottom-actions button.bl-button--primary',
+  'button.send-btn',
 ].join(', ')
 const defaultMaxLength = 30
 const closeDelay = 160
@@ -52,9 +53,9 @@ const getDanmakuInput = () =>
       isVisible(element),
   ) as HTMLInputElement | HTMLTextAreaElement | undefined
 
-const getSendButton = () => {
-  const button = dqa(sendButtonSelector).find(element => element instanceof HTMLButtonElement)
-  return button as HTMLButtonElement | undefined
+const getSendButton = (input: HTMLInputElement | HTMLTextAreaElement) => {
+  const panel = input.closest('.control-panel-ctnr') ?? dq('.control-panel-ctnr')
+  return Array.from(panel?.querySelectorAll<HTMLElement>(sendButtonSelector) ?? []).find(isVisible)
 }
 
 const setInputValue = (input: HTMLInputElement | HTMLTextAreaElement, value: string) => {
@@ -104,13 +105,17 @@ const sendDanmaku = (content: string) => {
   if (!input) {
     return
   }
+  const filledValue = input.value
   window.setTimeout(() => {
-    const sendButton = getSendButton()
-    if (!sendButton) {
-      Toast.error('未找到直播弹幕发送按钮', '弹幕悬停操作', 3000)
+    if (!input.isConnected || input.value !== filledValue) {
       return
     }
-    if (sendButton.disabled) {
+    const sendButton = getSendButton(input)
+    if (!sendButton) {
+      Toast.error('找不到发送按钮，弹幕已填入，可按回车发送', '弹幕悬停操作', 3000)
+      return
+    }
+    if (sendButton.matches(':disabled, [aria-disabled="true"]')) {
       Toast.info('当前弹幕无法发送', '弹幕悬停操作', 3000)
       return
     }
